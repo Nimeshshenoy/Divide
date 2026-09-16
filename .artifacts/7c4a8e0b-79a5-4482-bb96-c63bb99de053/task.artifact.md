@@ -1,0 +1,7 @@
+- `[x]` Creating data models and repository
+- `[x]` Implementing calculation engine (SplitLogic.kt)
+- `[/]` Phase 2: UI Refinement & Event Flow
+    - `[/]` Update MainScreen.kt (Layout & Total calculation)
+    - `[ ]` Update CreateEventScreen.kt (EventId support & Button renaming)
+    - `[ ]` Update MainActivity.kt (Navigation wiring)
+    - `[ ]` Verify flows (New event vs. Existing event)
