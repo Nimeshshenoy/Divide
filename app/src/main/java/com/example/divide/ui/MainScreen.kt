@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -20,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.divide.data.ExpenseEvent
 import com.example.divide.data.LocalRepository
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The main landing screen of the app.
@@ -123,6 +127,15 @@ fun SectionHeader(text: String) {
 fun EventItem(event: ExpenseEvent, onClick: () -> Unit) {
     // Calculate the total cost of this specific trip/event
     val totalAmount = event.expenses.sumOf { it.amount }
+    
+    // Formatting the creation date
+    val dateFormatter = remember { SimpleDateFormat("dd/MM/yy", Locale.getDefault()) }
+    val formattedDate = dateFormatter.format(Date(event.createdAt))
+    
+    // Identifying the creator (first user in the list, usually the local player)
+    val creatorName = event.users.firstOrNull { it.isLocalPlayer }?.name 
+        ?: event.users.firstOrNull()?.name 
+        ?: "Unknown"
 
     Card(
         modifier = Modifier
@@ -141,11 +154,12 @@ fun EventItem(event: ExpenseEvent, onClick: () -> Unit) {
             Column {
                 Text(text = event.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "${event.users.size} participants",
-                    style = MaterialTheme.typography.bodySmall
+                    text = "created on $formattedDate by $creatorName",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            // Displaying the total amount for the event (e.g., sum of lunch, dinner, etc.)
+            // Displaying the total amount for the event
             Text(
                 text = "₹${"%.2f".format(totalAmount)}",
                 style = MaterialTheme.typography.titleLarge,

@@ -19,6 +19,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.divide.data.Expense
 import com.example.divide.data.LocalRepository
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Screen used to add an individual expense (e.g. "Lunch at Hotel")
@@ -55,6 +58,8 @@ fun AddExpenseScreen(
     // Controls for dropdown menus
     var paidByExpanded by remember { mutableStateOf(false) }
     var sharedByExpanded by remember { mutableStateOf(false) }
+    
+    val dateFormatter = remember { SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()) }
 
     Scaffold(
         topBar = {
@@ -229,7 +234,12 @@ fun AddExpenseScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = expense.name)
+                                Text(text = expense.name, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    text = dateFormatter.format(Date(expense.timestamp)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Text(text = "₹${"%.2f".format(expense.amount)}", fontWeight = FontWeight.Bold)
                             }
                             // Requirement 4: Add an edit button in each entry

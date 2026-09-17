@@ -21,7 +21,8 @@ data class Expense(
     val name: String, // e.g., "Lunch"
     val amount: Double, // The total cost paid
     val payerId: String, // The ID of the User who paid
-    val participantIds: List<String> // IDs of users who are sharing this specific cost
+    val participantIds: List<String>, // IDs of users who are sharing this specific cost
+    val timestamp: Long = System.currentTimeMillis() // Date and time when expense was added
 )
 
 /**
@@ -36,5 +37,6 @@ data class ExpenseEvent(
     val name: String, // e.g., "Udaipur Trip"
     val users: List<User> = emptyList(), // All friends added to this trip
     val expenses: List<Expense> = emptyList(), // All individual costs (Lunch, Dinner, etc.)
-    val isSettled: Boolean = false // Whether the trip accounts have been closed
+    val isSettled: Boolean = false, // Whether the trip accounts have been closed
+    val createdAt: Long = System.currentTimeMillis() // Date when the trip was created
 )

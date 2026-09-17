@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [ExpenseEvent::class, Profile::class], version = 1, exportSchema = false)
+@Database(entities = [ExpenseEvent::class, Profile::class], version = 3, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class ExpenseDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
@@ -21,7 +21,9 @@ abstract class ExpenseDatabase : RoomDatabase() {
                     context.applicationContext,
                     ExpenseDatabase::class.java,
                     "expense_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration(dropAllTables = true) // Allow wiping the DB if schema changes
+                    .build()
                 INSTANCE = instance
                 instance
             }
