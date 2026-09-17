@@ -10,9 +10,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.divide.data.ExpenseDatabase
+import com.example.divide.data.LocalRepository
 import com.example.divide.ui.AddExpenseScreen
 import com.example.divide.ui.CreateEventScreen
 import com.example.divide.ui.MainScreen
+import com.example.divide.ui.ProfileScreen
 import com.example.divide.ui.theme.DivideTheme
 
 /**
@@ -22,6 +25,11 @@ import com.example.divide.ui.theme.DivideTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize the database and repository
+        val database = ExpenseDatabase.getDatabase(this)
+        LocalRepository.initialize(database.expenseDao())
+        
         enableEdgeToEdge()
         setContent {
             DivideTheme {
@@ -44,12 +52,18 @@ fun DivideApp() {
         composable("main") {
             MainScreen(
                 onCreateEvent = { navController.navigate("create_event") },
-                onEventClick = { eventId -> navController.navigate("create_event/$eventId") }
+                // Requirement: Redirect directly to Add Expense page when clicking a trip
+                onEventClick = { eventId -> navController.navigate("add_expense/$eventId") },
+                onProfileClick = { navController.navigate("profile") }
             )
         }
         
+        // Profile Screen: Edit user settings
+        composable("profile") {
+            ProfileScreen(onBack = { navController.popBackStack() })
+        }
+        
         // Create Event Screen: Handled as a container for a "Trip" (e.g. Udaipur)
-        // Supports both new creation and viewing existing details via optional {eventId}
         composable(
             route = "create_event?eventId={eventId}",
             arguments = listOf(navArgument("eventId") { 
@@ -62,28 +76,17 @@ fun DivideApp() {
             CreateEventScreen(
                 eventId = eventId,
                 onSaveAndAddExpense = { id -> 
-                    navController.navigate("add_expense/$id") 
+                    // Redirect to add expenses immediately after creating the trip container
+                    navController.navigate("add_expense/$id") {
+                        // Pop create_event from backstack so back button goes to main
+                        popUpTo("main") { saveState = true }
+                    }
                 },
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // Backward compatibility route or explicit route for existing events
-        composable(
-            route = "create_event/{eventId}",
-            arguments = listOf(navArgument("eventId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val eventId = backStackEntry.arguments?.getString("eventId")
-            CreateEventScreen(
-                eventId = eventId,
-                onSaveAndAddExpense = { id -> 
-                    navController.navigate("add_expense/$id") 
-                },
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        // Add Expense Screen: Where specific costs (e.g. Lunch) are added to a trip
+        // Add Expense Screen: Now acts as the primary dashboard for adding costs to a trip
         composable(
             route = "add_expense/{eventId}",
             arguments = listOf(navArgument("eventId") { type = NavType.StringType })
@@ -91,10 +94,7 @@ fun DivideApp() {
             val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
             AddExpenseScreen(
                 eventId = eventId,
-                onSave = { 
-                    // After saving an expense, we go back to the Trip details screen
-                    navController.popBackStack() 
-                },
+                // Requirement: No longer redirecting on save, so we only need the back action
                 onBack = { navController.popBackStack() }
             )
         }

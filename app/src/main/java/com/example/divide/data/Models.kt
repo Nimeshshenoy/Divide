@@ -1,5 +1,7 @@
 package com.example.divide.data
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 import java.util.UUID
 
 /**
@@ -25,8 +27,11 @@ data class Expense(
 /**
  * Represents a collection of expenses (e.g., "Udaipur Trip").
  * This acts as a container for all participants and their shared expenses.
+ * Annotated with @Entity for Room persistence.
  */
+@Entity(tableName = "events")
 data class ExpenseEvent(
+    @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
     val name: String, // e.g., "Udaipur Trip"
     val users: List<User> = emptyList(), // All friends added to this trip

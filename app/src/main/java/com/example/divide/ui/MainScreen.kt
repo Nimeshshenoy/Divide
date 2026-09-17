@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,7 +30,8 @@ import com.example.divide.data.LocalRepository
 @Composable
 fun MainScreen(
     onCreateEvent: () -> Unit,
-    onEventClick: (String) -> Unit
+    onEventClick: (String) -> Unit,
+    onProfileClick: () -> Unit
 ) {
     // Observe the list of events from our repository
     val events by LocalRepository.events.collectAsState()
@@ -39,7 +42,14 @@ fun MainScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Divide") })
+            TopAppBar(
+                title = { Text("Divide") },
+                actions = {
+                    IconButton(onClick = onProfileClick) {
+                        Icon(Icons.Default.Person, contentDescription = "Profile")
+                    }
+                }
+            )
         }
     ) { innerPadding ->
         Column(

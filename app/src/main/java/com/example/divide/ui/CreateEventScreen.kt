@@ -30,12 +30,19 @@ fun CreateEventScreen(
     onSaveAndAddExpense: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    // Load existing event data if we have an ID, otherwise start fresh
-    val existingEvent = remember(eventId) { eventId?.let { LocalRepository.getEvent(it) } }
+    // Collect the list of events reactively from the repository.
+    val events by LocalRepository.events.collectAsState()
+    // Observe the profile for the local user's name
+    val profile by LocalRepository.profile.collectAsState()
+    
+    // Find the specific event we are editing, if an ID was provided.
+    val existingEvent = remember(eventId, events) { eventId?.let { id -> events.find { it.id == id } } }
 
-    var eventName by remember { mutableStateOf(existingEvent?.name ?: "") }
-    var currentUsers by remember { 
-        mutableStateOf(existingEvent?.users ?: listOf(User(name = "Me", isLocalPlayer = true))) 
+    var eventName by remember(existingEvent) { mutableStateOf(existingEvent?.name ?: "") }
+    var currentUsers by remember(existingEvent, profile) { 
+        mutableStateOf(
+            existingEvent?.users ?: listOf(User(name = profile.name, isLocalPlayer = true))
+        ) 
     }
     
     val scope = rememberCoroutineScope()
@@ -87,28 +94,7 @@ fun CreateEventScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Expenses Section: Shows the list of individual costs added to this trip
-            Text(
-                text = "Expenses",
-                style = MaterialTheme.typography.titleLarge
-            )
-            
-            LazyColumn(modifier = Modifier.weight(1f)) {
-                items(existingEvent?.expenses ?: emptyList()) { expense ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(text = expense.name)
-                            Text(text = "₹${expense.amount}", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
+
 
             // Footer: The primary action button
             Button(

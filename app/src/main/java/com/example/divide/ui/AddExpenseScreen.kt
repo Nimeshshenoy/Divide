@@ -1,11 +1,21 @@
 package com.example.divide.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.divide.data.Expense
 import com.example.divide.data.LocalRepository
@@ -18,18 +28,30 @@ import com.example.divide.data.LocalRepository
 @Composable
 fun AddExpenseScreen(
     eventId: String,
-    onSave: () -> Unit,
     onBack: () -> Unit
 ) {
-    // Retrieve the trip container from the repository using the ID
-    val event = LocalRepository.getEvent(eventId) ?: return
+    // Collect the list of events and find the one we are interested in.
+    val events by LocalRepository.events.collectAsState()
+    val profile by LocalRepository.profile.collectAsState()
+    val event = events.find { it.id == eventId } ?: return
     
     // UI State for the form fields
     var expenseName by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
-    var paidBy by remember { mutableStateOf(event.users.first()) }
-    var sharedBy by remember { mutableStateOf(event.users) }
     
+    // Map users to show the profile name for the local player
+    val displayUsers = remember(event.users, profile) {
+        event.users.map { if (it.isLocalPlayer) it.copy(name = profile.name) else it }
+    }
+
+    var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.first()) }
+    var sharedBy by remember(displayUsers) { mutableStateOf(displayUsers) }
+    
+    // Tracking if we are editing an existing expense
+    var editingExpenseId by remember { mutableStateOf<String?>(null) }
+    
+    val focusManager = LocalFocusManager.current
+
     // Controls for dropdown menus
     var paidByExpanded by remember { mutableStateOf(false) }
     var sharedByExpanded by remember { mutableStateOf(false) }
@@ -37,7 +59,7 @@ fun AddExpenseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Expense") },
+                title = { Text("${event.name} Expenses") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
                 }
@@ -50,100 +72,179 @@ fun AddExpenseScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Field 1: Name of the individual expense
-            Text("Expense Name")
+            // Form Section
+            Text(if (editingExpenseId == null) "Expense Name" else "Edit Expense Name")
             TextField(
                 value = expenseName,
                 onValueChange = { expenseName = it },
                 placeholder = { Text("e.g. Lunch at hotel") },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true, // Requirement 3: Disable enter expanding the box
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Next
+                )
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Field 2: Amount entry with numeric keyboard
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Enter Amount", modifier = Modifier.weight(1f))
                 TextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.width(150.dp)
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = { focusManager.clearFocus() }
+                    ),
+                    modifier = Modifier.width(150.dp),
+                    singleLine = true // Requirement 3: Disable enter expanding the box
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Field 3: Dropdown to select who paid for this expense
-            Box {
-                OutlinedButton(onClick = { paidByExpanded = true }) {
-                    Text("Paid by: ${paidBy.name}")
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                // Paid By Dropdown
+                Box {
+                    OutlinedButton(onClick = { paidByExpanded = true }) {
+                        Text("Paid by: ${paidBy.name}")
+                    }
+                    DropdownMenu(expanded = paidByExpanded, onDismissRequest = { paidByExpanded = false }) {
+                        event.users.forEach { user ->
+                            DropdownMenuItem(
+                                text = { Text(user.name) },
+                                onClick = {
+                                    paidBy = user
+                                    paidByExpanded = false
+                                }
+                            )
+                        }
+                    }
                 }
-                DropdownMenu(expanded = paidByExpanded, onDismissRequest = { paidByExpanded = false }) {
-                    event.users.forEach { user ->
-                        DropdownMenuItem(
-                            text = { Text(user.name) },
-                            onClick = {
-                                paidBy = user
-                                paidByExpanded = false
-                            }
-                        )
+
+                // Shared By Dropdown
+                Box {
+                    OutlinedButton(onClick = { sharedByExpanded = true }) {
+                        Text("To be shared by: ${if (sharedBy.size == event.users.size) "All" else "${sharedBy.size} users"}")
+                    }
+                    DropdownMenu(expanded = sharedByExpanded, onDismissRequest = { sharedByExpanded = false }) {
+                        event.users.forEach { user ->
+                            val isSelected = sharedBy.contains(user)
+                            DropdownMenuItem(
+                                text = { 
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Checkbox(checked = isSelected, onCheckedChange = null)
+                                        Text(user.name)
+                                    }
+                                },
+                                onClick = {
+                                    sharedBy = if (isSelected) sharedBy - user else sharedBy + user
+                                }
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Field 4: Multi-select dropdown to choose who shares this cost
-            // By default, it includes all participants of the trip.
-            Box {
-                OutlinedButton(onClick = { sharedByExpanded = true }) {
-                    Text("To be shared by: ${if (sharedBy.size == event.users.size) "All" else "${sharedBy.size} users"}")
-                }
-                DropdownMenu(expanded = sharedByExpanded, onDismissRequest = { sharedByExpanded = false }) {
-                    event.users.forEach { user ->
-                        val isSelected = sharedBy.contains(user)
-                        DropdownMenuItem(
-                            text = { 
-                                Row {
-                                    Checkbox(checked = isSelected, onCheckedChange = null)
-                                    Text(user.name)
-                                }
-                            },
-                            onClick = {
-                                // Toggle user selection
-                                sharedBy = if (isSelected) {
-                                    sharedBy - user
-                                } else {
-                                    sharedBy + user
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Action: Save the expense to the trip and go back to event details
+            // Action: Save or Update the expense
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull() ?: 0.0
                     if (expenseName.isNotBlank() && amountDouble > 0 && sharedBy.isNotEmpty()) {
-                        val newExpense = Expense(
-                            name = expenseName,
-                            amount = amountDouble,
-                            payerId = paidBy.id,
-                            participantIds = sharedBy.map { it.id }
-                        )
-                        // Update the event in the repository by adding this new expense
-                        LocalRepository.updateEvent(event.copy(expenses = event.expenses + newExpense))
-                        onSave()
+                        val newExpenses = if (editingExpenseId != null) {
+                            // Update existing expense
+                            event.expenses.map {
+                                if (it.id == editingExpenseId) {
+                                    it.copy(
+                                        name = expenseName,
+                                        amount = amountDouble,
+                                        payerId = paidBy.id,
+                                        participantIds = sharedBy.map { id -> id.id }
+                                    )
+                                } else it
+                            }
+                        } else {
+                            // Add new expense
+                            event.expenses + Expense(
+                                name = expenseName,
+                                amount = amountDouble,
+                                payerId = paidBy.id,
+                                participantIds = sharedBy.map { it.id }
+                            )
+                        }
+                        
+                        LocalRepository.updateEvent(event.copy(expenses = newExpenses))
+                        
+                        // Clear fields and reset editing state
+                        expenseName = ""
+                        amount = ""
+                        editingExpenseId = null
+                        focusManager.clearFocus()
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save Expense")
+                Text(if (editingExpenseId == null) "Save Expense" else "Update Expense")
+            }
+
+            if (editingExpenseId != null) {
+                TextButton(
+                    onClick = {
+                        editingExpenseId = null
+                        expenseName = ""
+                        amount = ""
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                ) {
+                    Text("Cancel Edit")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Requirement: "expenses" section with underline
+            Text(
+                text = "expenses",
+                fontWeight = FontWeight.Bold,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            // Requirement: Show added expenses with an Edit button
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(event.expenses) { expense ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = expense.name)
+                                Text(text = "₹${"%.2f".format(expense.amount)}", fontWeight = FontWeight.Bold)
+                            }
+                            // Requirement 4: Add an edit button in each entry
+                            IconButton(onClick = {
+                                editingExpenseId = expense.id
+                                expenseName = expense.name
+                                amount = expense.amount.toString()
+                                paidBy = displayUsers.find { it.id == expense.payerId } ?: displayUsers.first()
+                                sharedBy = displayUsers.filter { expense.participantIds.contains(it.id) }
+                            }) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit Expense")
+                            }
+                        }
+                    }
+                }
             }
         }
     }

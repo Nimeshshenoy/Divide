@@ -1,47 +1,52 @@
-# Split Expenses App Implementation Plan - Phase 3 (Enhanced Expense Flow)
+# Split Expenses App Implementation Plan - Profile Section
 
-This phase streamlines the navigation between trips and individual expenses, making the "Add Expense" screen the primary dashboard for a trip.
+This phase introduces a Profile section where the user can set their own name, which will then be used throughout the app (e.g., in "Paid by" dropdowns and event participation) instead of a hardcoded "Me".
 
 ## User Review Required
 
-> [!IMPORTANT]
-> **Redirection Logic**: Tapping "Save Expense" will no longer return you to the previous screen. It will clear the input form so you can quickly add multiple expenses (e.g., Lunch, then Dinner) without leaving the page.
+> [!NOTE]
+> **Persistence**: I will use a separate table in the Room database or a simple `DataStore` to persist your profile name so it survives app restarts.
 
 ## Proposed Changes
 
+### Data Layer
+#### [NEW] [Profile.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/Profile.kt)
+Define a simple `Profile` entity to store local user settings.
+- `id`: Fixed ID (e.g., 0) for the single local profile.
+- `name`: The user's display name.
+
+#### [MODIFY] [ExpenseDao.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDao.kt)
+Add methods to get and update the local profile.
+
+#### [MODIFY] [ExpenseDatabase.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDatabase.kt)
+Include the new `Profile` entity in the database.
+
+#### [MODIFY] [LocalRepository.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/LocalRepository.kt)
+Add a `profile` StateFlow to observe the local user's name.
+
 ### UI Layer (Compose)
+#### [NEW] [ProfileScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/ProfileScreen.kt)
+- A simple form with a "Username" text field.
+- A "Save" button to update the profile.
 
 #### [MODIFY] [MainScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/MainScreen.kt)
-- **Navigation Update**: Change the click action on trip items (e.g., "Udaipur Trip") to navigate directly to the **Add Expense** screen instead of the Trip Details screen.
+- Add a "Profile" icon or button in the `TopAppBar` to navigate to the Profile screen.
+
+#### [MODIFY] [CreateEventScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/CreateEventScreen.kt)
+- Update the default user list to use the name from the saved profile instead of "Me".
 
 #### [MODIFY] [AddExpenseScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/AddExpenseScreen.kt)
-- **Header Refinement**: Change the TopAppBar title to dynamically show **"[Event Name] Expenses"** (e.g., "Udaipur Trip Expenses").
-- **New Section: "expenses"**:
-    - Add a section below the "Shared By" dropdown.
-    - Title "expenses" with an underline (matching the Main Screen style).
-    - A list (LazyColumn) showing all expenses already added to this trip (e.g., "Lunch: ₹500").
-- **Behavior Update**:
-    - When "Save Expense" is clicked:
-        1. Save the expense to the repository.
-        2. **Clear the input fields** (Name, Amount) so the form is ready for the next entry.
-        3. The new expense will immediately appear in the "expenses" section below.
-        4. No screen redirection.
+- Ensure the "Me" user displays the correct name from the profile.
 
 ### Logic & Navigation
-
 #### [MODIFY] [MainActivity.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/MainActivity.kt)
-- Update the `main` -> `add_expense` connection.
-- Ensure the `AddExpenseScreen` callback doesn't force a back navigation on every save.
-
----
+- Add the `profile` route to the NavHost.
 
 ## Verification Plan
 
 ### Manual Verification
-- **Navigation**: Click "Udaipur Trip" on Main Screen -> Verify you land on the "Udaipur Trip Expenses" screen.
-- **Continuous Adding**:
-    1. Add "Lunch", "500" -> Click Save.
-    2. Verify the form clears and "Lunch" appears in the list below.
-    3. Add "Dinner", "1000" -> Click Save.
-    4. Verify both "Lunch" and "Dinner" are visible.
-- **Header**: Verify the title is correct.
+1. Open the app and navigate to the **Profile** screen via the icon in the TopAppBar.
+2. Enter a new name (e.g., "John Doe") and click **Save**.
+3. Go to "Create expense event". Verify that the first participant slot shows "John Doe" instead of "Me".
+4. Add an expense. Verify that "Paid by" dropdown shows "John Doe".
+5. Close and restart the app. Verify that the name "John Doe" is still preserved.
