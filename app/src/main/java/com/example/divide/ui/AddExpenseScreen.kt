@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -52,6 +53,8 @@ fun AddExpenseScreen(
     
     // Tracking if we are editing an existing expense
     var editingExpenseId by remember { mutableStateOf<String?>(null) }
+    // Tracking expense to delete for confirmation dialog
+    var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
     
     val focusManager = LocalFocusManager.current
 
@@ -78,13 +81,15 @@ fun AddExpenseScreen(
                 .padding(16.dp)
         ) {
             // Form Section
-            Text(if (editingExpenseId == null) "Expense Name" else "Edit Expense Name")
+            Text(if (editingExpenseId == null) "Expense Name" else "Editing Expense (Name cannot be changed)")
             TextField(
                 value = expenseName,
                 onValueChange = { expenseName = it },
                 placeholder = { Text("e.g. Lunch at hotel") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true, // Requirement 3: Disable enter expanding the box
+                readOnly = editingExpenseId != null, // Requirement: Only amount can be changed in edit mode
+                enabled = editingExpenseId == null, // Visual feedback that it's disabled
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Next
                 )
@@ -252,10 +257,41 @@ fun AddExpenseScreen(
                             }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Edit Expense")
                             }
+
+                            // Requirement: Add delete button (trash can)
+                            IconButton(onClick = { expenseToDelete = expense }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete Expense", tint = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    // Requirement: Warning pop up before deleting
+    expenseToDelete?.let { expense ->
+        AlertDialog(
+            onDismissRequest = { expenseToDelete = null },
+            title = { Text("Delete Expense") },
+            text = { Text("You are about to delete this expense (${expense.name}), are you sure?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val newExpenses = event.expenses.filter { it.id != expense.id }
+                        LocalRepository.updateEvent(event.copy(expenses = event.expenses + newExpenses))
+                        expenseToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { expenseToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
