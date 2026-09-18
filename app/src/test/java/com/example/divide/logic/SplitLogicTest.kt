@@ -1,7 +1,8 @@
 package com.example.divide.logic
 
 import com.example.divide.data.Expense
-import com.example.divide.data.Trip
+import com.example.divide.data.Group
+import com.example.divide.data.TripWithDetails
 import com.example.divide.data.User
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -10,15 +11,17 @@ class SplitLogicTest {
 
     @Test
     fun testBasicSplit() {
-        val userA = User(name = "A")
-        val userB = User(name = "B")
-        val userC = User(name = "C")
+        val groupId = "group1"
+        val userA = User(id = "A", name = "A", groupId = groupId)
+        val userB = User(id = "B", name = "B", groupId = groupId)
+        val userC = User(id = "C", name = "C", groupId = groupId)
         
-        val trip = Trip(
-            name = "Test",
+        val tripWithDetails = TripWithDetails(
+            group = Group(id = groupId, name = "Test"),
             users = listOf(userA, userB, userC),
             expenses = listOf(
                 Expense(
+                    groupId = groupId,
                     name = "Lunch",
                     amount = 30.0,
                     payerId = userA.id,
@@ -27,7 +30,7 @@ class SplitLogicTest {
             )
         )
         
-        val balances = SplitLogic.calculateBalances(trip)
+        val balances = SplitLogic.calculateBalances(tripWithDetails)
         
         // A paid 30, share is 10. A is owed 20.
         // B and C each owe 10.
@@ -43,15 +46,17 @@ class SplitLogicTest {
 
     @Test
     fun testPartialSplit() {
-        val userA = User(name = "A")
-        val userB = User(name = "B")
-        val userC = User(name = "C")
+        val groupId = "group2"
+        val userA = User(id = "A", name = "A", groupId = groupId)
+        val userB = User(id = "B", name = "B", groupId = groupId)
+        val userC = User(id = "C", name = "C", groupId = groupId)
         
-        val trip = Trip(
-            name = "Test",
+        val tripWithDetails = TripWithDetails(
+            group = Group(id = groupId, name = "Test"),
             users = listOf(userA, userB, userC),
             expenses = listOf(
                 Expense(
+                    groupId = groupId,
                     name = "Drink",
                     amount = 20.0,
                     payerId = userA.id,
@@ -60,7 +65,7 @@ class SplitLogicTest {
             )
         )
         
-        val balances = SplitLogic.calculateBalances(trip)
+        val balances = SplitLogic.calculateBalances(tripWithDetails)
         
         val balanceA = balances.find { it.user.id == userA.id }?.amount ?: 0.0
         val balanceB = balances.find { it.user.id == userB.id }?.amount ?: 0.0

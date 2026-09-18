@@ -6,7 +6,17 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Trip::class, Profile::class], version = 4, exportSchema = false)
+@Database(
+    entities = [
+        Group::class,
+        User::class,
+        Expense::class,
+        SyncEvent::class,
+        Profile::class
+    ],
+    version = 5, // Bumped for normalized schema
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class ExpenseDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao

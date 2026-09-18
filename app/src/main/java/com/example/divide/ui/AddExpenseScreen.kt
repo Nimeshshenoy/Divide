@@ -25,8 +25,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Screen used to add an individual expense (e.g. "Lunch at Hotel")
- * to a specific trip.
+ * Screen used to add/edit individual expenses within a specific trip.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,31 +33,30 @@ fun AddExpenseScreen(
     tripId: String,
     onBack: () -> Unit
 ) {
-    // Collect the list of trips and find the one we are interested in.
+    // Observe the list of trips (with details) and current profile
     val trips by LocalRepository.trips.collectAsState()
     val profile by LocalRepository.profile.collectAsState()
-    val trip = trips.find { it.id == tripId } ?: return
     
-    // UI State for the form fields
+    // Find the specific trip we are currently viewing
+    val tripDetails = trips.find { it.group.id == tripId } ?: return
+    val group = tripDetails.group
+    
+    // UI State for form fields
     var expenseName by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     
-    // Map users to show the profile name for the local player
-    val displayUsers = remember(trip.users, profile) {
-        trip.users.map { if (it.isLocalPlayer) it.copy(name = profile.name) else it }
+    // Adjust local player's name based on current profile
+    val displayUsers = remember(tripDetails.users, profile) {
+        tripDetails.users.map { if (it.isLocalPlayer) it.copy(name = profile.name) else it }
     }
 
-    var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.first()) }
+    var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.firstOrNull() ?: displayUsers.first()) }
     var sharedBy by remember(displayUsers) { mutableStateOf(displayUsers) }
     
-    // Tracking if we are editing an existing expense
     var editingExpenseId by remember { mutableStateOf<String?>(null) }
-    // Tracking expense to delete for confirmation dialog
     var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
     
     val focusManager = LocalFocusManager.current
-
-    // Controls for dropdown menus
     var paidByExpanded by remember { mutableStateOf(false) }
     var sharedByExpanded by remember { mutableStateOf(false) }
     
@@ -67,7 +65,7 @@ fun AddExpenseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("${trip.name} Expenses") },
+                title = { Text("${group.name} Expenses") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
                 }
@@ -80,7 +78,7 @@ fun AddExpenseScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Form Section
+            // Expense input field
             Text(if (editingExpenseId == null) "Expense Name" else "Editing Expense (Name cannot be changed)")
             TextField(
                 value = expenseName,
@@ -90,13 +88,12 @@ fun AddExpenseScreen(
                 singleLine = true,
                 readOnly = editingExpenseId != null,
                 enabled = editingExpenseId == null,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Next
-                )
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Amount input field
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Enter Amount", modifier = Modifier.weight(1f))
                 TextField(
@@ -106,9 +103,7 @@ fun AddExpenseScreen(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
                     ),
-                    keyboardActions = KeyboardActions(
-                        onDone = { focusManager.clearFocus() }
-                    ),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                     modifier = Modifier.width(150.dp),
                     singleLine = true
                 )
@@ -116,8 +111,8 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Dropdowns for Payer and Participants
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                // Paid By Dropdown
                 Box {
                     OutlinedButton(onClick = { paidByExpanded = true }) {
                         Text("Paid by: ${paidBy.name}")
@@ -135,7 +130,6 @@ fun AddExpenseScreen(
                     }
                 }
 
-                // Shared By Dropdown
                 Box {
                     OutlinedButton(onClick = { sharedByExpanded = true }) {
                         Text("To be shared by: ${if (sharedBy.size == displayUsers.size) "All" else "${sharedBy.size} users"}")
@@ -151,11 +145,7 @@ fun AddExpenseScreen(
                                     }
                                 },
                                 onClick = {
-                                    sharedBy = if (isSelected) {
-                                        sharedBy.filterNot { it.id == user.id }
-                                    } else {
-                                        sharedBy + user
-                                    }
+                                    sharedBy = if (isSelected) sharedBy.filterNot { it.id == user.id } else sharedBy + user
                                 }
                             )
                         }
@@ -165,36 +155,32 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Action: Save or Update the expense
+            // Action: Save Expense (Adds data to DB and logs SyncEvent)
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull() ?: 0.0
                     if (expenseName.isNotBlank() && amountDouble > 0 && sharedBy.isNotEmpty()) {
-                        val newExpenses = if (editingExpenseId != null) {
-                            // Update existing expense
-                            trip.expenses.map {
-                                if (it.id == editingExpenseId) {
-                                    it.copy(
-                                        name = expenseName,
-                                        amount = amountDouble,
-                                        payerId = paidBy.id,
-                                        participantIds = sharedBy.map { id -> id.id }
-                                    )
-                                } else it
+                        if (editingExpenseId != null) {
+                            val originalExpense = tripDetails.expenses.find { it.id == editingExpenseId }
+                            originalExpense?.let {
+                                val updatedExpense = it.copy(
+                                    amount = amountDouble,
+                                    payerId = paidBy.id,
+                                    participantIds = sharedBy.map { u -> u.id }
+                                )
+                                LocalRepository.updateExpense(updatedExpense)
                             }
                         } else {
-                            // Add new expense
-                            trip.expenses + Expense(
+                            val newExpense = Expense(
+                                groupId = tripId,
                                 name = expenseName,
                                 amount = amountDouble,
                                 payerId = paidBy.id,
                                 participantIds = sharedBy.map { it.id }
                             )
+                            LocalRepository.addExpense(newExpense)
                         }
                         
-                        LocalRepository.updateTrip(trip.copy(expenses = newExpenses))
-                        
-                        // Clear fields and reset editing state
                         expenseName = ""
                         amount = ""
                         editingExpenseId = null
@@ -221,7 +207,6 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Requirement: "expenses" section with underline
             Text(
                 text = "expenses",
                 fontWeight = FontWeight.Bold,
@@ -229,9 +214,9 @@ fun AddExpenseScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Requirement: Show added expenses with an Edit button
+            // List of added expenses with Edit/Delete options
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(trip.expenses) { expense ->
+                items(tripDetails.expenses) { expense ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -271,7 +256,7 @@ fun AddExpenseScreen(
         }
     }
 
-    // Requirement: Warning pop up before deleting
+    // Deletion confirmation dialog
     expenseToDelete?.let { expense ->
         AlertDialog(
             onDismissRequest = { expenseToDelete = null },
@@ -280,8 +265,7 @@ fun AddExpenseScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val newExpenses = trip.expenses.filter { it.id != expense.id }
-                        LocalRepository.updateTrip(trip.copy(expenses = newExpenses))
+                        LocalRepository.deleteExpense(expense)
                         expenseToDelete = null
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)

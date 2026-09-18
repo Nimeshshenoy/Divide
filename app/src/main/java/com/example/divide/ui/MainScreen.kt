@@ -17,7 +17,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.divide.data.LocalRepository
-import com.example.divide.data.Trip
+import com.example.divide.data.TripWithDetails
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -34,12 +34,12 @@ fun MainScreen(
     onTripClick: (String) -> Unit,
     onProfileClick: () -> Unit
 ) {
-    // Observe the list of trips from our repository
+    // Observe the list of trips (with their nested details) from our repository
     val trips by LocalRepository.trips.collectAsState()
     
-    // Separate trips into Unsettled and Settled categories
-    val unsettled = trips.filter { !it.isSettled }
-    val settled = trips.filter { it.isSettled }
+    // Separate trips into Unsettled and Settled categories based on the 'group' metadata
+    val unsettled = trips.filter { !it.group.isSettled }
+    val settled = trips.filter { it.group.isSettled }
 
     Scaffold(
         topBar = {
@@ -61,7 +61,7 @@ fun MainScreen(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Large, centered "Create expense trip" button
+            // Large, centered button to start a new trip setup
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -80,22 +80,22 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(48.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                // Section for Unsettled Expenses
+                // Section for trips where payments are still pending
                 item {
                     SectionHeader("unsettled expenses")
                 }
-                items(unsettled) { trip ->
-                    TripItem(trip) { onTripClick(trip.id) }
+                items(unsettled) { tripDetails ->
+                    TripItem(tripDetails) { onTripClick(tripDetails.group.id) }
                 }
                 
                 item { Spacer(modifier = Modifier.height(32.dp)) }
 
-                // Section for Settled Expenses
+                // Section for trips that have been fully paid off
                 item {
                     SectionHeader("settled expenses")
                 }
-                items(settled) { trip ->
-                    TripItem(trip) { onTripClick(trip.id) }
+                items(settled) { tripDetails ->
+                    TripItem(tripDetails) { onTripClick(tripDetails.group.id) }
                 }
             }
         }
@@ -103,7 +103,7 @@ fun MainScreen(
 }
 
 /**
- * A styled header with an underline as seen in the user's design image.
+ * A styled header with an underline.
  */
 @Composable
 fun SectionHeader(text: String) {
@@ -118,20 +118,22 @@ fun SectionHeader(text: String) {
 
 /**
  * Represents a single trip card in the list.
- * Shows the trip name and the total sum of all expenses within that trip.
+ * Shows the trip name, total accumulated cost, and creation info.
  */
 @Composable
-fun TripItem(trip: Trip, onClick: () -> Unit) {
-    // Calculate the total cost of this specific trip
-    val totalAmount = trip.expenses.sumOf { it.amount }
+fun TripItem(tripDetails: TripWithDetails, onClick: () -> Unit) {
+    val group = tripDetails.group
     
-    // Formatting the creation date
+    // Calculate the sum of all individual expenses belonging to this trip
+    val totalAmount = tripDetails.expenses.sumOf { it.amount }
+    
+    // UI formatting for the date
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yy", Locale.getDefault()) }
-    val formattedDate = dateFormatter.format(Date(trip.createdAt))
+    val formattedDate = dateFormatter.format(Date(group.createdAt))
     
-    // Identifying the creator (first user in the list, usually the local player)
-    val creatorName = trip.users.firstOrNull { it.isLocalPlayer }?.name 
-        ?: trip.users.firstOrNull()?.name 
+    // Show who created the trip (identifying by local player flag)
+    val creatorName = tripDetails.users.firstOrNull { it.isLocalPlayer }?.name 
+        ?: tripDetails.users.firstOrNull()?.name 
         ?: "Unknown"
 
     Card(
@@ -149,14 +151,14 @@ fun TripItem(trip: Trip, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(text = trip.name, style = MaterialTheme.typography.titleMedium)
+                Text(text = group.name, style = MaterialTheme.typography.titleMedium)
                 Text(
                     text = "created on $formattedDate by $creatorName",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            // Displaying the total amount for the trip
+            // Displays the aggregate total for the trip
             Text(
                 text = "₹${"%.2f".format(totalAmount)}",
                 style = MaterialTheme.typography.titleLarge,

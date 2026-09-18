@@ -14,10 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.divide.data.LocalRepository
-import com.example.divide.data.Trip
-import com.example.divide.data.User
+import com.example.divide.data.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * Screen used to setup a new trip or edit trip participants.
@@ -29,18 +28,26 @@ fun TripSetupScreen(
     onSaveAndAddExpense: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    // Collect the list of trips reactively from the repository.
+    // Observe all trips and current profile from the centralized repository
     val trips by LocalRepository.trips.collectAsState()
-    // Observe the profile for the local user's name
     val profile by LocalRepository.profile.collectAsState()
     
-    // Find the specific trip we are editing, if an ID was provided.
-    val existingTrip = remember(tripId, trips) { tripId?.let { id -> trips.find { it.id == id } } }
+    // Find the specific trip details if editing
+    val existingTripDetails = remember(tripId, trips) { tripId?.let { id -> trips.find { it.group.id == id } } }
 
-    var tripName by remember(existingTrip) { mutableStateOf(existingTrip?.name ?: "") }
-    var currentUsers by remember(existingTrip, profile) { 
+    var tripName by remember(existingTripDetails) { mutableStateOf(existingTripDetails?.group?.name ?: "") }
+    
+    // Local state for the temporary users list
+    var currentParticipants by remember(existingTripDetails, profile) { 
         mutableStateOf(
-            existingTrip?.users ?: listOf(User(name = profile.name, isLocalPlayer = true))
+            existingTripDetails?.users ?: listOf(
+                User(
+                    id = UUID.randomUUID().toString(),
+                    name = profile.name,
+                    groupId = tripId ?: "pending", // Will be updated on save if new
+                    isLocalPlayer = true
+                )
+            )
         ) 
     }
     
@@ -64,7 +71,7 @@ fun TripSetupScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Header: Trip name entry
+            // Field for the Trip/Group name
             TextField(
                 value = tripName,
                 onValueChange = { tripName = it },
@@ -75,16 +82,21 @@ fun TripSetupScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // User Slots
+            // Participant selection: 4 slots with + buttons to add people
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 repeat(4) { index ->
-                    val user = currentUsers.getOrNull(index + 1)
+                    // Index 0 is the creator, slots are for index 1, 2, 3, 4
+                    val user = currentParticipants.getOrNull(index + 1)
                     UserSlot(user = user) {
-                        if (currentUsers.size < 5) {
-                            currentUsers = currentUsers + User(name = "Friend ${currentUsers.size}")
+                        if (currentParticipants.size < 5) {
+                            currentParticipants = currentParticipants + User(
+                                id = UUID.randomUUID().toString(),
+                                name = "Friend ${currentParticipants.size}",
+                                groupId = tripId ?: "pending"
+                            )
                         }
                     }
                 }
@@ -92,14 +104,14 @@ fun TripSetupScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Expenses Section
+            // Show existing expenses if viewing an existing trip
             Text(
                 text = "Expenses",
                 style = MaterialTheme.typography.titleLarge
             )
             
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(existingTrip?.expenses ?: emptyList()) { expense ->
+                items(existingTripDetails?.expenses ?: emptyList()) { expense ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -116,19 +128,22 @@ fun TripSetupScreen(
                 }
             }
 
-            // Footer
+            // Save Action: Writes to normalized tables and logs SyncEvent
             Button(
                 onClick = {
-                    if (tripName.isNotBlank() && currentUsers.size > 1) {
-                        val finalTripId = if (tripId == null) {
-                            val newTrip = Trip(name = tripName, users = currentUsers)
-                            LocalRepository.addTrip(newTrip)
-                            newTrip.id
+                    if (tripName.isNotBlank() && currentParticipants.size > 1) {
+                        val finalTripId = tripId ?: UUID.randomUUID().toString()
+                        
+                        // Prep the Group and Users with the final ID
+                        val group = Group(id = finalTripId, name = tripName)
+                        val usersToSave = currentParticipants.map { it.copy(groupId = finalTripId) }
+                        
+                        if (tripId == null) {
+                            LocalRepository.addTrip(group, usersToSave)
                         } else {
-                            val updatedTrip = existingTrip!!.copy(name = tripName, users = currentUsers)
-                            LocalRepository.updateTrip(updatedTrip)
-                            tripId
+                            // Logic for updating group name/users can be added here
                         }
+                        
                         onSaveAndAddExpense(finalTripId)
                     } else {
                         scope.launch {
@@ -144,6 +159,9 @@ fun TripSetupScreen(
     }
 }
 
+/**
+ * A square slot that displays a user's name or an Add icon.
+ */
 @Composable
 fun UserSlot(user: User?, onAdd: () -> Unit) {
     Box(

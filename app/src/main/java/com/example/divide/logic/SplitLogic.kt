@@ -1,6 +1,6 @@
 package com.example.divide.logic
 
-import com.example.divide.data.Trip
+import com.example.divide.data.TripWithDetails
 import com.example.divide.data.User
 
 /**
@@ -25,11 +25,11 @@ object SplitLogic {
      *    - Each participant is debited their share (- amount / number of participants).
      * 3. The sum for each user results in their net position.
      */
-    fun calculateBalances(trip: Trip): List<Balance> {
+    fun calculateBalances(tripDetails: TripWithDetails): List<Balance> {
         // Initialize balances for all users in the trip to 0
-        val balanceMap = trip.users.associate { it.id to 0.0 }.toMutableMap()
+        val balanceMap = tripDetails.users.associate { it.id to 0.0 }.toMutableMap()
 
-        for (expense in trip.expenses) {
+        for (expense in tripDetails.expenses) {
             // Avoid division by zero if no one is sharing
             if (expense.participantIds.isEmpty()) continue
 
@@ -37,16 +37,20 @@ object SplitLogic {
             val share = expense.amount / expense.participantIds.size
             
             // Credit the Payer: They spent this money, so the system 'owes' it back to them
-            balanceMap[expense.payerId] = (balanceMap[expense.payerId] ?: 0.0) + expense.amount
+            if (balanceMap.containsKey(expense.payerId)) {
+                balanceMap[expense.payerId] = balanceMap[expense.payerId]!! + expense.amount
+            }
             
             // Debit Participants: Each person sharing the expense 'owes' their share to the system
             for (participantId in expense.participantIds) {
-                balanceMap[participantId] = (balanceMap[participantId] ?: 0.0) - share
+                if (balanceMap.containsKey(participantId)) {
+                    balanceMap[participantId] = balanceMap[participantId]!! - share
+                }
             }
         }
 
         // Convert the map back to a list of Balance objects for the UI
-        return trip.users.map { user ->
+        return tripDetails.users.map { user ->
             Balance(user, balanceMap[user.id] ?: 0.0)
         }
     }

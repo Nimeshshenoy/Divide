@@ -1,42 +1,73 @@
 package com.example.divide.data
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
 /**
- * Represents a person participating in expenses.
+ * [Group] represents the metadata of a shared trip.
+ * This table is normalized to avoid storing large JSON blobs.
  */
-data class User(
-    val id: String = UUID.randomUUID().toString(), // Unique ID for identification
-    val name: String,
-    val isLocalPlayer: Boolean = false // True for the user holding this device
-)
-
-/**
- * Represents a single financial transaction (e.g., "Lunch").
- */
-data class Expense(
-    val id: String = UUID.randomUUID().toString(),
-    val name: String, // e.g., "Lunch"
-    val amount: Double, // The total cost paid
-    val payerId: String, // The ID of the User who paid
-    val participantIds: List<String>, // IDs of users who are sharing this specific cost
-    val timestamp: Long = System.currentTimeMillis() // Date and time when expense was added
-)
-
-/**
- * Represents a collection of expenses (e.g., "Udaipur Trip").
- * This acts as a container for all participants and their shared expenses.
- * Annotated with @Entity for Room persistence.
- */
-@Entity(tableName = "trips")
-data class Trip(
+@Entity(tableName = "groups")
+data class Group(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
-    val name: String, // e.g., "Udaipur Trip"
-    val users: List<User> = emptyList(), // All friends added to this trip
-    val expenses: List<Expense> = emptyList(), // All individual costs (Lunch, Dinner, etc.)
-    val isSettled: Boolean = false, // Whether the trip accounts have been closed
-    val createdAt: Long = System.currentTimeMillis() // Date when the trip was created
+    val name: String,
+    val isSettled: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+/**
+ * [User] represents a participant.
+ * Users are stored in their own table to support multi-group memberships
+ * and global profile settings.
+ */
+@Entity(
+    tableName = "users",
+    indices = [Index(value = ["groupId"])]
+)
+data class User(
+    @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val groupId: String, // Links this participant record to a specific group
+    val isLocalPlayer: Boolean = false // Identifies the device owner
+)
+
+/**
+ * [Expense] represents a single transaction within a group.
+ * It uses ForeignKeys (conceptually) to relate back to the Group.
+ */
+@Entity(
+    tableName = "expenses",
+    indices = [Index(value = ["groupId"])]
+)
+data class Expense(
+    @PrimaryKey
+    val id: String = UUID.randomUUID().toString(),
+    val groupId: String, // The trip this expense belongs to
+    val name: String,
+    val amount: Double,
+    val payerId: String, // ID of the User who paid
+    val participantIds: List<String>, // List of User IDs sharing the cost
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+/**
+ * [SyncEvent] is the core of our P2P architecture.
+ * Instead of syncing whole tables, we sync these "Action" records.
+ * If 4 phones have the same list of SyncEvents, they will arrive at the same state.
+ */
+@Entity(tableName = "sync_events")
+data class SyncEvent(
+    @PrimaryKey
+    val eventId: String = UUID.randomUUID().toString(), // Must be unique across all devices
+    val groupId: String,
+    val authorId: String, // Who created this action
+    val type: String, // e.g., "ADD_EXPENSE", "ADD_USER", "UPDATE_GROUP"
+    val payload: String, // JSON representation of the data (User, Expense, or Group)
+    val createdAt: Long = System.currentTimeMillis(),
+    val signature: String? = null // Reserved for future cryptographic security
 )
