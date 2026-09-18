@@ -26,26 +26,26 @@ import java.util.Locale
 
 /**
  * Screen used to add an individual expense (e.g. "Lunch at Hotel")
- * to a specific trip/event.
+ * to a specific trip.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddExpenseScreen(
-    eventId: String,
+    tripId: String,
     onBack: () -> Unit
 ) {
-    // Collect the list of events and find the one we are interested in.
-    val events by LocalRepository.events.collectAsState()
+    // Collect the list of trips and find the one we are interested in.
+    val trips by LocalRepository.trips.collectAsState()
     val profile by LocalRepository.profile.collectAsState()
-    val event = events.find { it.id == eventId } ?: return
+    val trip = trips.find { it.id == tripId } ?: return
     
     // UI State for the form fields
     var expenseName by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     
     // Map users to show the profile name for the local player
-    val displayUsers = remember(event.users, profile) {
-        event.users.map { if (it.isLocalPlayer) it.copy(name = profile.name) else it }
+    val displayUsers = remember(trip.users, profile) {
+        trip.users.map { if (it.isLocalPlayer) it.copy(name = profile.name) else it }
     }
 
     var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.first()) }
@@ -67,7 +67,7 @@ fun AddExpenseScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("${event.name} Expenses") },
+                title = { Text("${trip.name} Expenses") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
                 }
@@ -87,9 +87,9 @@ fun AddExpenseScreen(
                 onValueChange = { expenseName = it },
                 placeholder = { Text("e.g. Lunch at hotel") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true, // Requirement 3: Disable enter expanding the box
-                readOnly = editingExpenseId != null, // Requirement: Only amount can be changed in edit mode
-                enabled = editingExpenseId == null, // Visual feedback that it's disabled
+                singleLine = true,
+                readOnly = editingExpenseId != null,
+                enabled = editingExpenseId == null,
                 keyboardOptions = KeyboardOptions(
                     imeAction = ImeAction.Next
                 )
@@ -110,7 +110,7 @@ fun AddExpenseScreen(
                         onDone = { focusManager.clearFocus() }
                     ),
                     modifier = Modifier.width(150.dp),
-                    singleLine = true // Requirement 3: Disable enter expanding the box
+                    singleLine = true
                 )
             }
 
@@ -123,7 +123,7 @@ fun AddExpenseScreen(
                         Text("Paid by: ${paidBy.name}")
                     }
                     DropdownMenu(expanded = paidByExpanded, onDismissRequest = { paidByExpanded = false }) {
-                        event.users.forEach { user ->
+                        displayUsers.forEach { user ->
                             DropdownMenuItem(
                                 text = { Text(user.name) },
                                 onClick = {
@@ -138,11 +138,11 @@ fun AddExpenseScreen(
                 // Shared By Dropdown
                 Box {
                     OutlinedButton(onClick = { sharedByExpanded = true }) {
-                        Text("To be shared by: ${if (sharedBy.size == event.users.size) "All" else "${sharedBy.size} users"}")
+                        Text("To be shared by: ${if (sharedBy.size == displayUsers.size) "All" else "${sharedBy.size} users"}")
                     }
                     DropdownMenu(expanded = sharedByExpanded, onDismissRequest = { sharedByExpanded = false }) {
-                        event.users.forEach { user ->
-                            val isSelected = sharedBy.contains(user)
+                        displayUsers.forEach { user ->
+                            val isSelected = sharedBy.any { it.id == user.id }
                             DropdownMenuItem(
                                 text = { 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -151,7 +151,11 @@ fun AddExpenseScreen(
                                     }
                                 },
                                 onClick = {
-                                    sharedBy = if (isSelected) sharedBy - user else sharedBy + user
+                                    sharedBy = if (isSelected) {
+                                        sharedBy.filterNot { it.id == user.id }
+                                    } else {
+                                        sharedBy + user
+                                    }
                                 }
                             )
                         }
@@ -168,7 +172,7 @@ fun AddExpenseScreen(
                     if (expenseName.isNotBlank() && amountDouble > 0 && sharedBy.isNotEmpty()) {
                         val newExpenses = if (editingExpenseId != null) {
                             // Update existing expense
-                            event.expenses.map {
+                            trip.expenses.map {
                                 if (it.id == editingExpenseId) {
                                     it.copy(
                                         name = expenseName,
@@ -180,7 +184,7 @@ fun AddExpenseScreen(
                             }
                         } else {
                             // Add new expense
-                            event.expenses + Expense(
+                            trip.expenses + Expense(
                                 name = expenseName,
                                 amount = amountDouble,
                                 payerId = paidBy.id,
@@ -188,7 +192,7 @@ fun AddExpenseScreen(
                             )
                         }
                         
-                        LocalRepository.updateEvent(event.copy(expenses = newExpenses))
+                        LocalRepository.updateTrip(trip.copy(expenses = newExpenses))
                         
                         // Clear fields and reset editing state
                         expenseName = ""
@@ -227,7 +231,7 @@ fun AddExpenseScreen(
 
             // Requirement: Show added expenses with an Edit button
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(event.expenses) { expense ->
+                items(trip.expenses) { expense ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -247,7 +251,6 @@ fun AddExpenseScreen(
                                 )
                                 Text(text = "₹${"%.2f".format(expense.amount)}", fontWeight = FontWeight.Bold)
                             }
-                            // Requirement 4: Add an edit button in each entry
                             IconButton(onClick = {
                                 editingExpenseId = expense.id
                                 expenseName = expense.name
@@ -258,7 +261,6 @@ fun AddExpenseScreen(
                                 Icon(Icons.Default.Edit, contentDescription = "Edit Expense")
                             }
 
-                            // Requirement: Add delete button (trash can)
                             IconButton(onClick = { expenseToDelete = expense }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete Expense", tint = MaterialTheme.colorScheme.error)
                             }
@@ -278,8 +280,8 @@ fun AddExpenseScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val newExpenses = event.expenses.filter { it.id != expense.id }
-                        LocalRepository.updateEvent(event.copy(expenses = event.expenses + newExpenses))
+                        val newExpenses = trip.expenses.filter { it.id != expense.id }
+                        LocalRepository.updateTrip(trip.copy(expenses = newExpenses))
                         expenseToDelete = null
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)

@@ -30,8 +30,8 @@ data class Expense(
  * This acts as a container for all participants and their shared expenses.
  * Annotated with @Entity for Room persistence.
  */
-@Entity(tableName = "events")
-data class ExpenseEvent(
+@Entity(tableName = "trips")
+data class Trip(
     @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
     val name: String, // e.g., "Udaipur Trip"

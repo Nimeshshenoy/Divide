@@ -13,10 +13,10 @@ object LocalRepository {
     private var dao: ExpenseDao? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    // Reactive flow of all events from the database
-    private var _eventsFlow: StateFlow<List<ExpenseEvent>>? = null
-    val events: StateFlow<List<ExpenseEvent>>
-        get() = _eventsFlow ?: throw IllegalStateException("LocalRepository must be initialized with a DAO")
+    // Reactive flow of all trips from the database
+    private var _tripsFlow: StateFlow<List<Trip>>? = null
+    val trips: StateFlow<List<Trip>>
+        get() = _tripsFlow ?: throw IllegalStateException("LocalRepository must be initialized with a DAO")
 
     // Reactive flow of the local user's profile
     private var _profileFlow: StateFlow<Profile>? = null
@@ -28,7 +28,7 @@ object LocalRepository {
      */
     fun initialize(expenseDao: ExpenseDao) {
         dao = expenseDao
-        _eventsFlow = expenseDao.getAllEvents().stateIn(
+        _tripsFlow = expenseDao.getAllTrips().stateIn(
             scope = scope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
@@ -42,25 +42,25 @@ object LocalRepository {
             )
     }
 
-    fun addEvent(event: ExpenseEvent) {
+    fun addTrip(trip: Trip) {
         scope.launch {
-            dao?.insertEvent(event)
+            dao?.insertTrip(trip)
         }
     }
 
-    fun updateEvent(event: ExpenseEvent) {
+    fun updateTrip(trip: Trip) {
         scope.launch {
-            dao?.updateEvent(event)
+            dao?.updateTrip(trip)
         }
+    }
+
+    suspend fun getTrip(tripId: String): Trip? {
+        return dao?.getTripById(tripId)
     }
 
     fun updateProfile(name: String) {
         scope.launch {
             dao?.insertProfile(Profile(name = name))
         }
-    }
-
-    suspend fun getEvent(eventId: String): ExpenseEvent? {
-        return dao?.getEventById(eventId)
     }
 }

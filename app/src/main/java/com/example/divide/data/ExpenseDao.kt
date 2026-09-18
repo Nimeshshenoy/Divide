@@ -5,20 +5,20 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ExpenseDao {
-    @Query("SELECT * FROM events")
-    fun getAllEvents(): Flow<List<ExpenseEvent>>
+    @Query("SELECT * FROM trips")
+    fun getAllTrips(): Flow<List<Trip>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertEvent(event: ExpenseEvent)
+    suspend fun insertTrip(trip: Trip)
 
     @Update
-    suspend fun updateEvent(event: ExpenseEvent)
+    suspend fun updateTrip(trip: Trip)
 
     @Delete
-    suspend fun deleteEvent(event: ExpenseEvent)
+    suspend fun deleteTrip(trip: Trip)
 
-    @Query("SELECT * FROM events WHERE id = :eventId")
-    suspend fun getEventById(eventId: String): ExpenseEvent?
+    @Query("SELECT * FROM trips WHERE id = :tripId")
+    suspend fun getTripById(tripId: String): Trip?
 
     @Query("SELECT * FROM profile WHERE id = 0")
     fun getProfile(): Flow<Profile?>

@@ -9,9 +9,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,30 +16,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.divide.data.ExpenseEvent
 import com.example.divide.data.LocalRepository
+import com.example.divide.data.Trip
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
  * The main landing screen of the app.
- * Displays a large button to create a new event and lists existing events
+ * Displays a large button to create a new trip and lists existing trips
  * categorized by their settlement status.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    onCreateEvent: () -> Unit,
-    onEventClick: (String) -> Unit,
+    onCreateTrip: () -> Unit,
+    onTripClick: (String) -> Unit,
     onProfileClick: () -> Unit
 ) {
-    // Observe the list of events from our repository
-    val events by LocalRepository.events.collectAsState()
+    // Observe the list of trips from our repository
+    val trips by LocalRepository.trips.collectAsState()
     
-    // Separate events into Unsettled and Settled categories
-    val unsettled = events.filter { !it.isSettled }
-    val settled = events.filter { !unsettled.contains(it) } // Simplified for logic check
+    // Separate trips into Unsettled and Settled categories
+    val unsettled = trips.filter { !it.isSettled }
+    val settled = trips.filter { it.isSettled }
 
     Scaffold(
         topBar = {
@@ -64,17 +61,17 @@ fun MainScreen(
         ) {
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Large, centered "Create expense event" button as per the mockup
+            // Large, centered "Create expense trip" button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(80.dp)
                     .border(2.dp, Color.Black)
-                    .clickable { onCreateEvent() },
+                    .clickable { onCreateTrip() },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Create expense event",
+                    text = "Create expense trip",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -87,8 +84,8 @@ fun MainScreen(
                 item {
                     SectionHeader("unsettled expenses")
                 }
-                items(unsettled) { event ->
-                    EventItem(event) { onEventClick(event.id) }
+                items(unsettled) { trip ->
+                    TripItem(trip) { onTripClick(trip.id) }
                 }
                 
                 item { Spacer(modifier = Modifier.height(32.dp)) }
@@ -97,8 +94,8 @@ fun MainScreen(
                 item {
                     SectionHeader("settled expenses")
                 }
-                items(settled) { event ->
-                    EventItem(event) { onEventClick(event.id) }
+                items(settled) { trip ->
+                    TripItem(trip) { onTripClick(trip.id) }
                 }
             }
         }
@@ -120,21 +117,21 @@ fun SectionHeader(text: String) {
 }
 
 /**
- * Represents a single event card in the list.
- * Shows the event name and the total sum of all expenses within that event.
+ * Represents a single trip card in the list.
+ * Shows the trip name and the total sum of all expenses within that trip.
  */
 @Composable
-fun EventItem(event: ExpenseEvent, onClick: () -> Unit) {
-    // Calculate the total cost of this specific trip/event
-    val totalAmount = event.expenses.sumOf { it.amount }
+fun TripItem(trip: Trip, onClick: () -> Unit) {
+    // Calculate the total cost of this specific trip
+    val totalAmount = trip.expenses.sumOf { it.amount }
     
     // Formatting the creation date
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yy", Locale.getDefault()) }
-    val formattedDate = dateFormatter.format(Date(event.createdAt))
+    val formattedDate = dateFormatter.format(Date(trip.createdAt))
     
     // Identifying the creator (first user in the list, usually the local player)
-    val creatorName = event.users.firstOrNull { it.isLocalPlayer }?.name 
-        ?: event.users.firstOrNull()?.name 
+    val creatorName = trip.users.firstOrNull { it.isLocalPlayer }?.name 
+        ?: trip.users.firstOrNull()?.name 
         ?: "Unknown"
 
     Card(
@@ -152,14 +149,14 @@ fun EventItem(event: ExpenseEvent, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(text = event.name, style = MaterialTheme.typography.titleMedium)
+                Text(text = trip.name, style = MaterialTheme.typography.titleMedium)
                 Text(
                     text = "created on $formattedDate by $creatorName",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            // Displaying the total amount for the event
+            // Displaying the total amount for the trip
             Text(
                 text = "₹${"%.2f".format(totalAmount)}",
                 style = MaterialTheme.typography.titleLarge,

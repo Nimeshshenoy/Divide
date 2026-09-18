@@ -1,7 +1,7 @@
 package com.example.divide.logic
 
 import com.example.divide.data.Expense
-import com.example.divide.data.ExpenseEvent
+import com.example.divide.data.Trip
 import com.example.divide.data.User
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -14,7 +14,7 @@ class SplitLogicTest {
         val userB = User(name = "B")
         val userC = User(name = "C")
         
-        val event = ExpenseEvent(
+        val trip = Trip(
             name = "Test",
             users = listOf(userA, userB, userC),
             expenses = listOf(
@@ -27,7 +27,7 @@ class SplitLogicTest {
             )
         )
         
-        val balances = SplitLogic.calculateBalances(event)
+        val balances = SplitLogic.calculateBalances(trip)
         
         // A paid 30, share is 10. A is owed 20.
         // B and C each owe 10.
@@ -47,7 +47,7 @@ class SplitLogicTest {
         val userB = User(name = "B")
         val userC = User(name = "C")
         
-        val event = ExpenseEvent(
+        val trip = Trip(
             name = "Test",
             users = listOf(userA, userB, userC),
             expenses = listOf(
@@ -60,7 +60,7 @@ class SplitLogicTest {
             )
         )
         
-        val balances = SplitLogic.calculateBalances(event)
+        val balances = SplitLogic.calculateBalances(trip)
         
         val balanceA = balances.find { it.user.id == userA.id }?.amount ?: 0.0
         val balanceB = balances.find { it.user.id == userB.id }?.amount ?: 0.0

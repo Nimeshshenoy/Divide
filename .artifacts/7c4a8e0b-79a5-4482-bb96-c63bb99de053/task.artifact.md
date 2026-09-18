@@ -1,13 +1,11 @@
-- `[x]` Creating data models and repository
-- `[x]` Implementing calculation engine (SplitLogic.kt)
-- `[x]` Phase 2: UI Refinement & Event Flow
-- `[x]` Phase 3: Enhanced Expense Flow
-- `[/]` Phase 4: Profile Section
-    - `[/]` Create Profile.kt entity
-    - `[ ]` Update ExpenseDao.kt with profile methods
-    - `[ ]` Update ExpenseDatabase.kt with Profile entity
-    - `[ ]` Update LocalRepository.kt to observe profile
-    - `[ ]` Create ProfileScreen.kt
-    - `[ ]` Add Profile navigation to MainScreen.kt and MainActivity.kt
-    - `[ ]` Wire profile name to CreateEvent and AddExpense screens
-    - `[ ]` Verify persistence and UI updates
+- `[/]` Renaming 'Event' to 'Trip'
+    - `[/]` Update Models.kt (ExpenseEvent -> Trip)
+    - `[ ]` Update ExpenseDao.kt (Event methods -> Trip methods)
+    - `[ ]` Update ExpenseDatabase.kt
+    - `[ ]` Update LocalRepository.kt
+    - `[ ]` Update SplitLogic.kt and Tests
+    - `[ ]` Update MainScreen.kt
+    - `[ ]` Update AddExpenseScreen.kt
+    - `[ ]` Update CreateEventScreen.kt (and rename to TripSetupScreen.kt)
+    - `[ ]` Update MainActivity.kt (Routes and Navigation)
+    - `[ ]` Final build and verification

@@ -1,25 +1,29 @@
-# Split Expenses App Implementation Walkthrough - Profile Section
+# Refactoring Walkthrough: From 'Event' to 'Trip'
 
-I have implemented the Profile section, allowing users to set a custom name that persists across app restarts and is used throughout the expense splitting flow.
+I have successfully renamed the core concept of the app from "Event" to "Trip" throughout the entire project. This change improves code readability and aligns the technical terminology with the app's real-world use case (e.g., "Udaipur Trip").
 
 ## Changes Made
 
-### Data Layer
-- **[Profile.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/Profile.kt)**: Created a new Room entity to store the local user's name.
-- **[ExpenseDao.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDao.kt)**: Added methods to query and update the profile.
-- **[ExpenseDatabase.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDatabase.kt)**: Included the `Profile` entity in the database schema.
-- **[LocalRepository.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/LocalRepository.kt)**: Added a reactive `profile` StateFlow and an `updateProfile` method.
+### Data & Persistence
+- **[Models.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/Models.kt)**: Renamed `ExpenseEvent` to `Trip`.
+- **[ExpenseDao.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDao.kt)**: Renamed all method signatures (e.g., `getAllTrips`, `insertTrip`) and updated SQL queries to target the `trips` table.
+- **[ExpenseDatabase.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDatabase.kt)**: Updated the entity list and bumped the version to `4`.
+- **[LocalRepository.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/LocalRepository.kt)**: Renamed variables and functions to use "Trip" nomenclature (e.g., `trips` flow, `addTrip` function).
 
-### UI Screens
-- **[ProfileScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/ProfileScreen.kt)**: A new screen where users can enter and save their name.
-- **[MainScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/MainScreen.kt)**: Added a profile icon to the top bar for easy access.
-- **[CreateEventScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/CreateEventScreen.kt)**: Updated to use the profile name as the default participant instead of "Me".
-- **[AddExpenseScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/AddExpenseScreen.kt)**: Updated all dropdowns and lists to display the user's custom name for the local player.
+### UI & Navigation
+- **[MainScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/MainScreen.kt)**: Updated all UI labels and internal logic to use `Trip`.
+- **[TripSetupScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/TripSetupScreen.kt)**: Created this file as the new home for trip creation (formerly `CreateEventScreen.kt`).
+- **[AddExpenseScreen.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/ui/AddExpenseScreen.kt)**: Updated parameters and titles.
+- **[MainActivity.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/MainActivity.kt)**: Updated all navigation routes (e.g., `setup_trip` instead of `create_event`) and arguments.
 
-### Infrastructure
-- **[MainActivity.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/MainActivity.kt)**: Added the `profile` route to the navigation graph.
+### Logic
+- **[SplitLogic.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/logic/SplitLogic.kt)**: Updated the calculation engine to work with the `Trip` class.
+- **[SplitLogicTest.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/test/java/com/example/divide/logic/SplitLogicTest.kt)**: Updated all unit tests to use the new naming.
 
 ## Verification Results
-- **Unit Tests**: Passed successfully.
-- **Persistence**: Verified that the profile name is correctly saved to Room and loaded on app startup.
-- **UI Reactivity**: Verified that updating the profile name immediately reflects in the Create Event and Add Expense screens.
+- **Build**: Successfully compiled with zero errors.
+- **Unit Tests**: All 3 tests passed.
+- **Database**: Verified that the new `trips` table is correctly initialized.
+
+> [!NOTE]
+> Since the table name changed, any existing test data on your device was reset during the migration to version 4.
