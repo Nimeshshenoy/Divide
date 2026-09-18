@@ -14,7 +14,7 @@ import androidx.room.TypeConverters
         SyncEvent::class,
         Profile::class
     ],
-    version = 5, // Bumped for normalized schema
+    version = 6, // Bumped for isDeleted field
     exportSchema = false
 )
 @TypeConverters(Converters::class)

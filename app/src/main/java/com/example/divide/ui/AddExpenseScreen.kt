@@ -214,9 +214,13 @@ fun AddExpenseScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // List of added expenses with Edit/Delete options
+            // List of added expenses (Active only) with Edit/Delete options
+            val activeExpenses = remember(tripDetails.expenses) {
+                tripDetails.expenses.filter { !it.isDeleted }
+            }
+            
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(tripDetails.expenses) { expense ->
+                items(activeExpenses) { expense ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()

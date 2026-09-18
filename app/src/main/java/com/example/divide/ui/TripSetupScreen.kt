@@ -110,8 +110,12 @@ fun TripSetupScreen(
                 style = MaterialTheme.typography.titleLarge
             )
             
+            val activeExpenses = remember(existingTripDetails?.expenses) {
+                existingTripDetails?.expenses?.filter { !it.isDeleted } ?: emptyList()
+            }
+            
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(existingTripDetails?.expenses ?: emptyList()) { expense ->
+                items(activeExpenses) { expense ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()

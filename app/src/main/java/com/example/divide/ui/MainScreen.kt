@@ -124,8 +124,8 @@ fun SectionHeader(text: String) {
 fun TripItem(tripDetails: TripWithDetails, onClick: () -> Unit) {
     val group = tripDetails.group
     
-    // Calculate the sum of all individual expenses belonging to this trip
-    val totalAmount = tripDetails.expenses.sumOf { it.amount }
+    // Calculate the sum of all ACTIVE (non-deleted) individual expenses belonging to this trip
+    val totalAmount = tripDetails.expenses.filter { !it.isDeleted }.sumOf { it.amount }
     
     // UI formatting for the date
     val dateFormatter = remember { SimpleDateFormat("dd/MM/yy", Locale.getDefault()) }

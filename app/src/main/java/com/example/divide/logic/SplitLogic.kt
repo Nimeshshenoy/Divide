@@ -29,7 +29,10 @@ object SplitLogic {
         // Initialize balances for all users in the trip to 0
         val balanceMap = tripDetails.users.associate { it.id to 0.0 }.toMutableMap()
 
-        for (expense in tripDetails.expenses) {
+        // Filter out deleted expenses before calculating
+        val activeExpenses = tripDetails.expenses.filter { !it.isDeleted }
+
+        for (expense in activeExpenses) {
             // Avoid division by zero if no one is sharing
             if (expense.participantIds.isEmpty()) continue
 

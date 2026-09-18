@@ -11,10 +11,6 @@ interface ExpenseDao {
 
     // --- READ OPERATIONS ---
 
-    /**
-     * Fetches all trips combined with their related users and expenses.
-     * @Transaction is required because Room performs multiple queries under the hood.
-     */
     @Transaction
     @Query("SELECT * FROM groups ORDER BY createdAt DESC")
     fun getAllTripsWithDetails(): Flow<List<TripWithDetails>>
@@ -26,7 +22,7 @@ interface ExpenseDao {
     @Query("SELECT * FROM profile WHERE id = 0")
     fun getProfile(): Flow<Profile?>
 
-    // --- WRITE OPERATIONS ---
+    // --- BASE WRITE OPERATIONS ---
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGroup(group: Group)
@@ -37,7 +33,8 @@ interface ExpenseDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExpense(expense: Expense)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // Task 3: IGNORE duplicate events to maintain an immutable log
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSyncEvent(event: SyncEvent)
 
     @Update
@@ -49,18 +46,36 @@ interface ExpenseDao {
     @Delete
     suspend fun deleteGroup(group: Group)
 
-    @Delete
-    suspend fun deleteExpense(expense: Expense)
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProfile(profile: Profile)
 
-    // --- SYNC OPERATIONS ---
+    // --- ATOMIC TRANSACTIONAL OPERATIONS (Task 1) ---
 
     /**
-     * Used for Bluetooth syncing. Returns all events created after a specific time
-     * or those not yet known to a peer.
+     * Atomically creates a trip and its initial sync event.
      */
-    @Query("SELECT * FROM sync_events WHERE createdAt > :sinceTimestamp ORDER BY createdAt ASC")
-    suspend fun getSyncEventsSince(sinceTimestamp: Long): List<SyncEvent>
+    @Transaction
+    suspend fun insertTripWithSync(group: Group, users: List<User>, syncEvent: SyncEvent) {
+        insertGroup(group)
+        users.forEach { insertUser(it) }
+        insertSyncEvent(syncEvent)
+    }
+
+    /**
+     * Atomically adds an expense and logs the sync event.
+     */
+    @Transaction
+    suspend fun insertExpenseWithSync(expense: Expense, syncEvent: SyncEvent) {
+        insertExpense(expense)
+        insertSyncEvent(syncEvent)
+    }
+
+    /**
+     * Atomically updates an expense and logs the sync event.
+     */
+    @Transaction
+    suspend fun updateExpenseWithSync(expense: Expense, syncEvent: SyncEvent) {
+        updateExpense(expense)
+        insertSyncEvent(syncEvent)
+    }
 }

@@ -52,7 +52,8 @@ data class Expense(
     val amount: Double,
     val payerId: String, // ID of the User who paid
     val participantIds: List<String>, // List of User IDs sharing the cost
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false // Task 4: Soft delete/tombstone for P2P consistency
 )
 
 /**
