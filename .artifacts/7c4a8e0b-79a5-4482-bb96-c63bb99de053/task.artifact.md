@@ -1,11 +1,11 @@
-- `[/]` Renaming 'Event' to 'Trip'
-    - `[/]` Update Models.kt (ExpenseEvent -> Trip)
-    - `[ ]` Update ExpenseDao.kt (Event methods -> Trip methods)
-    - `[ ]` Update ExpenseDatabase.kt
-    - `[ ]` Update LocalRepository.kt
-    - `[ ]` Update SplitLogic.kt and Tests
-    - `[ ]` Update MainScreen.kt
-    - `[ ]` Update AddExpenseScreen.kt
-    - `[ ]` Update CreateEventScreen.kt (and rename to TripSetupScreen.kt)
-    - `[ ]` Update MainActivity.kt (Routes and Navigation)
-    - `[ ]` Final build and verification
+- `[x]` Creating data models and repository
+- `[x]` Implementing calculation engine (SplitLogic.kt)
+- `[x]` Phase 2: UI Refinement & Event Flow
+- `[x]` Phase 3: Enhanced Expense Flow
+- `[x]` Phase 4: Profile Section
+- `[/]` Phase 5: Event Processor (Sync Logic)
+    - `[/]` Update ExpenseDao.kt with lookup methods
+    - `[ ]` Create EventProcessor.kt with deduplication and routing
+    - `[ ]` Implement deterministic tie-breaking logic
+    - `[ ]` Integrate processor into LocalRepository.kt
+    - `[ ]` Create unit tests for EventProcessor

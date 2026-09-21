@@ -18,6 +18,9 @@ fun ProfileScreen(onBack: () -> Unit) {
     
     // Local state for the text field
     var name by remember(profile) { mutableStateOf(profile.name) }
+    
+    // State for showing the warning dialog
+    var showWarning by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -40,19 +43,27 @@ fun ProfileScreen(onBack: () -> Unit) {
                 value = name,
                 onValueChange = { name = it },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                placeholder = { Text("Enter your real name") }
             )
             
             Spacer(modifier = Modifier.height(24.dp))
             
             Button(
                 onClick = {
-                    if (name.isNotBlank()) {
-                        LocalRepository.updateProfile(name)
-                        onBack()
+                    val trimmedName = name.trim()
+                    if (trimmedName.isNotBlank() && trimmedName.lowercase() != "me") {
+                        // If a name was already set (not "Me"), show a warning before changing
+                        if (profile.name != "Me" && profile.name != trimmedName) {
+                            showWarning = true
+                        } else {
+                            LocalRepository.updateProfile(trimmedName)
+                            onBack()
+                        }
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = name.trim().isNotEmpty() && name.trim().lowercase() != "me"
             ) {
                 Text(text = "Save Profile")
             }
@@ -60,10 +71,38 @@ fun ProfileScreen(onBack: () -> Unit) {
             Spacer(modifier = Modifier.height(16.dp))
             
             Text(
-                text = "Setting your name helps friends identify you when splitting expenses.",
+                text = "Note: Choose a name your friends will recognize. Avoid generic names like 'Me'.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+
+    // Warning Dialog to prevent "random" renaming after initial setup
+    if (showWarning) {
+        AlertDialog(
+            onDismissRequest = { showWarning = false },
+            title = { Text("Change Username?") },
+            text = { 
+                Text("Changing your name will update your identity in all existing and future trips. " +
+                     "Friends you've already synced with will see your new name. Are you sure you want to proceed?") 
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        LocalRepository.updateProfile(name.trim())
+                        showWarning = false
+                        onBack()
+                    }
+                ) {
+                    Text("Yes, Change")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWarning = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

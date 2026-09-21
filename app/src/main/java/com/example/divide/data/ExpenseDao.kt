@@ -49,6 +49,20 @@ interface ExpenseDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertProfile(profile: Profile)
 
+    // --- LOOKUP OPERATIONS (For Sync/Conflict Resolution) ---
+
+    @Query("SELECT * FROM sync_events WHERE eventId = :eventId")
+    suspend fun getSyncEventById(eventId: String): SyncEvent?
+
+    @Query("SELECT * FROM expenses WHERE id = :expenseId")
+    suspend fun getExpenseById(expenseId: String): Expense?
+
+    @Query("SELECT * FROM groups WHERE id = :groupId")
+    suspend fun getGroupById(groupId: String): Group?
+
+    @Query("SELECT * FROM users WHERE id = :userId")
+    suspend fun getUserById(userId: String): User?
+
     // --- ATOMIC TRANSACTIONAL OPERATIONS (Task 1) ---
 
     /**

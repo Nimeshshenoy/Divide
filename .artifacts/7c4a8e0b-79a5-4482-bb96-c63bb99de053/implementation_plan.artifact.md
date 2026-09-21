@@ -1,79 +1,51 @@
-# Implementation Plan: Database Refactoring for P2P Sync (Event Sourcing)
+# Implementation Plan: Event Processor for P2P Synchronization
 
-This phase refactors the database from a single "Trip" entity with JSON blobs into a normalized structure with four tables: `groups`, `users`, `expenses`, and `sync_events`. This architecture is designed to support robust, conflict-free synchronization over Bluetooth/Wi-Fi.
+This phase implements the `EventProcessor`, which is responsible for applying incoming `SyncEvent`s to the local database state. This component ensures that all devices eventually reach the same state (Eventual Consistency) and prevents duplicate processing.
 
 ## User Review Required
 
-> [!WARNING]
-> **Database Wipe**: This refactor involves a fundamental change to the schema. Existing local data will be reset.
 > [!IMPORTANT]
-> **Event Sourcing**: We are moving towards a system where the "Source of Truth" is the `sync_events` ledger. The other tables effectively become a "Read Model" derived from these events.
-> [!NOTE]
-> **Educational Comments**: I will include detailed comments throughout the new code to explain how the normalized schema, relations, and sync ledger work.
+> **Deterministic Tie-Breaking**: For `UPDATE` events, we will implement logic that compares the incoming event's timestamp and ID against the current record to ensure that the "winning" state is the same on all devices, regardless of the order in which events are received.
 
 ## Proposed Changes
 
-### Data Layer (Entities)
-
-#### [MODIFY] [Models.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/Models.kt)
-Define the new normalized structure:
-- **`Group`**: Replaces the basic metadata of `Trip`.
-- **`User`**: Now a separate entity table (to support global user tracking).
-- **`Expense`**: Now a separate entity table linked to `groupId`.
-- **`SyncEvent`**: The new ledger table with:
-    - `eventId` (Primary Key, unique UUID)
-    - `groupId`
-    - `authorId`
-    - `type` (e.g., "ADD_EXPENSE", "UPDATE_GROUP", "ADD_USER")
-    - `payload` (JSON blob containing the data for that event)
-    - `createdAt`
-    - `signature` (For future security verification)
-
-#### [NEW] [Relations.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/Relations.kt)
-Define Room "POJOs" to handle relationships:
-- `TripWithDetails`: A class that combines a `Group`, its list of `User`s, and its list of `Expense`s for UI consumption.
-
----
-
-### Data Access (DAOs)
+### Data Layer (DAO)
 
 #### [MODIFY] [ExpenseDao.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDao.kt)
-- Add separate insert/update methods for each table.
-- Add complex queries using `@Transaction` to fetch `TripWithDetails`.
-- Add methods to query the `sync_events` table (essential for Bluetooth syncing later).
-
-#### [MODIFY] [ExpenseDatabase.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDatabase.kt)
-- Add the new entities to the `@Database` annotation.
-- Bump version to `5`.
+- Add `getSyncEventById(eventId: String)` to check for duplicates.
+- Add `getExpenseById(id: String)` and `getUserById(id: String)` for conflict resolution checks.
 
 ---
 
-### Repository & Logic
+### Logic Layer (Sync)
+
+#### [NEW] [EventProcessor.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/sync/EventProcessor.kt)
+Create a centralized processor with the following structure:
+- **`processIncomingEvent(event: SyncEvent)`**: The entry point.
+    1. Checks if the `eventId` already exists in the ledger (Deduplication).
+    2. Routes the event to specific handlers based on `type`.
+    3. Saves the event to the ledger and updates the state tables in a single **Transaction**.
+- **Handlers**:
+    - `handleAddTrip`: Parses payload to `Group` and `User` list.
+    - `handleAddExpense`: Parses payload to `Expense`.
+    - `handleUpdateExpense`: Implements tie-breaking logic (Timestamp > Lexicographical ID) before updating.
+    - `handleDeleteExpense`: Marks the expense as `isDeleted`.
+    - `handleUpdateUserName`: Updates participant names.
+
+---
+
+### Repository Integration
 
 #### [MODIFY] [LocalRepository.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/LocalRepository.kt)
-- Update `addTrip` and `addExpense` logic.
-- **Key Change**: When adding data, the repository should now:
-    1. Insert the data into the specific table (`Group` or `Expense`).
-    2. **Automatically generate and save a `SyncEvent`** representing this action. This ensures that any local change is ready to be broadcasted to friends.
-
-#### [MODIFY] [SplitLogic.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/logic/SplitLogic.kt)
-- Update the calculation engine to accept the new `TripWithDetails` structure.
-
----
-
-### UI Layer
-
-#### [MODIFY] UI Screens
-- Update `MainScreen.kt`, `TripSetupScreen.kt`, and `AddExpenseScreen.kt` to consume the new `TripWithDetails` objects.
-- Most UI logic remains similar, but the way data is passed and collected from the repository will change to reflect the multi-table structure.
+- Provide a reference to the `EventProcessor`.
+- This allows the future networking layer to simply call `LocalRepository.processor.processIncomingEvent(event)`.
 
 ## Verification Plan
 
 ### Automated Tests
-- **Unit Tests**: Update `SplitLogicTest.kt` for the new models.
-- **Database Tests**: Verify that inserting a `SyncEvent` works and that relationships (fetching expenses for a group) are correct.
+- **[NEW] [EventProcessorTest.kt]**:
+    - Test deduplication: Send the same event twice and verify the payload is only applied once.
+    - Test tie-breaking: Send an "older" update after a "newer" one and verify the database keeps the newer state.
 
 ### Manual Verification
-1. Create a trip -> Verify a `SyncEvent` of type "ADD_TRIP" is generated in the DB (via logs).
-2. Add an expense -> Verify a `SyncEvent` of type "ADD_EXPENSE" is generated.
-3. Verify that the UI correctly displays totals by joining data from the separate tables.
+- Since networking isn't built yet, we can verify this by manually "injecting" a mock `SyncEvent` into the processor via a temporary test button or logcat command.
