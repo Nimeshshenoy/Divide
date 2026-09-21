@@ -56,8 +56,11 @@ object LocalRepository {
                 type = "ADD_TRIP",
                 payload = gson.toJson(mapOf("group" to group, "users" to creators))
             )
-            // Call atomic transaction in DAO
-            dao?.insertTripWithSync(group, creators, syncEvent)
+            // Store the ID of the event that created this trip
+            val tripWithEvent = group.copy(lastEventId = syncEvent.eventId)
+            val usersWithEvent = creators.map { it.copy(lastEventId = syncEvent.eventId) }
+            
+            dao?.insertTripWithSync(tripWithEvent, usersWithEvent, syncEvent)
         }
     }
 
@@ -69,7 +72,9 @@ object LocalRepository {
                 type = "ADD_EXPENSE",
                 payload = gson.toJson(expense)
             )
-            dao?.insertExpenseWithSync(expense, syncEvent)
+            // Track which event created this expense
+            val expenseWithEvent = expense.copy(lastEventId = syncEvent.eventId)
+            dao?.insertExpenseWithSync(expenseWithEvent, syncEvent)
         }
     }
 
@@ -81,21 +86,25 @@ object LocalRepository {
                 type = "UPDATE_EXPENSE",
                 payload = gson.toJson(expense)
             )
-            dao?.updateExpenseWithSync(expense, syncEvent)
+            // Track which event updated this expense
+            val expenseWithEvent = expense.copy(lastEventId = syncEvent.eventId)
+            dao?.updateExpenseWithSync(expenseWithEvent, syncEvent)
         }
     }
 
     fun deleteExpense(expense: Expense) {
         scope.launch {
-            // Task 4: Soft Delete (Tombstone)
-            val deletedExpense = expense.copy(isDeleted = true)
             val syncEvent = SyncEvent(
                 groupId = expense.groupId,
                 authorId = profile.value.userId, // Using distributed identity
                 type = "DELETE_EXPENSE",
                 payload = gson.toJson(expense.id)
             )
-            // Reusing update with sync for the soft delete
+            // Task 4: Soft Delete (Tombstone)
+            val deletedExpense = expense.copy(
+                isDeleted = true,
+                lastEventId = syncEvent.eventId // Track the delete event
+            )
             dao?.updateExpenseWithSync(deletedExpense, syncEvent)
         }
     }
@@ -121,18 +130,19 @@ object LocalRepository {
             allTrips.forEach { tripDetails ->
                 val localUser = tripDetails.users.find { it.isLocalPlayer }
                 if (localUser != null) {
-                    val updatedUser = localUser.copy(name = newName)
-                    dao?.insertUser(updatedUser)
-
-                    // 3. Log a SyncEvent for this specific trip
-                    dao?.insertSyncEvent(
-                        SyncEvent(
-                            groupId = tripDetails.group.id,
-                            authorId = oldProfile.userId,
-                            type = "UPDATE_USER_NAME",
-                            payload = gson.toJson(updatedUser)
-                        )
+                    val syncEvent = SyncEvent(
+                        groupId = tripDetails.group.id,
+                        authorId = oldProfile.userId,
+                        type = "UPDATE_USER_NAME",
+                        payload = gson.toJson(localUser.copy(name = newName))
                     )
+                    
+                    val updatedUser = localUser.copy(
+                        name = newName,
+                        lastEventId = syncEvent.eventId
+                    )
+                    
+                    dao?.updateUserWithSync(updatedUser, syncEvent)
                 }
             }
         }

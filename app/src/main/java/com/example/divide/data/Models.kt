@@ -16,7 +16,8 @@ data class Group(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
     val isSettled: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val lastEventId: String? = null // ID of the SyncEvent that last updated this group
 )
 
 /**
@@ -33,7 +34,8 @@ data class User(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
     val groupId: String, // Links this participant record to a specific group
-    val isLocalPlayer: Boolean = false // Identifies the device owner
+    val isLocalPlayer: Boolean = false, // Identifies the device owner
+    val lastEventId: String? = null // ID of the SyncEvent that last updated this user
 )
 
 /**
@@ -53,7 +55,8 @@ data class Expense(
     val payerId: String, // ID of the User who paid
     val participantIds: List<String>, // List of User IDs sharing the cost
     val timestamp: Long = System.currentTimeMillis(),
-    val isDeleted: Boolean = false // Task 4: Soft delete/tombstone for P2P consistency
+    val isDeleted: Boolean = false, // Task 4: Soft delete/tombstone for P2P consistency
+    val lastEventId: String? = null // ID of the SyncEvent that last updated this expense
 )
 
 /**

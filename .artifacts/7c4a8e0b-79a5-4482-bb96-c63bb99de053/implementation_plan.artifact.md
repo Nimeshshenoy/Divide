@@ -1,51 +1,58 @@
-# Implementation Plan: Event Processor for P2P Synchronization
+# Implementation Plan: Robust P2P Conflict Resolution
 
-This phase implements the `EventProcessor`, which is responsible for applying incoming `SyncEvent`s to the local database state. This component ensures that all devices eventually reach the same state (Eventual Consistency) and prevents duplicate processing.
+This phase hardens the `EventProcessor` to handle edge cases like out-of-order events, "resurrection" of deleted items, and atomicity for user updates. We will implement a formal "Last-Writer-Wins" strategy using event metadata.
 
 ## User Review Required
 
 > [!IMPORTANT]
-> **Deterministic Tie-Breaking**: For `UPDATE` events, we will implement logic that compares the incoming event's timestamp and ID against the current record to ensure that the "winning" state is the same on all devices, regardless of the order in which events are received.
+> **State Tracking**: I will add a `lastEventId` field to our state tables (`Group`, `User`, `Expense`). This allows the processor to accurately compare an incoming event against the one that produced the *current* local state.
 
 ## Proposed Changes
 
-### Data Layer (DAO)
+### Data Layer (Models & DB)
+
+#### [MODIFY] [Models.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/Models.kt)
+- Add `lastEventId: String?` to `Group`, `User`, and `Expense`.
+- This field stores the `eventId` of the `SyncEvent` that last modified this specific record.
+
+#### [MODIFY] [ExpenseDatabase.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDatabase.kt)
+- Bump version to `8`.
+
+---
+
+### Data Access (DAO)
 
 #### [MODIFY] [ExpenseDao.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/ExpenseDao.kt)
-- Add `getSyncEventById(eventId: String)` to check for duplicates.
-- Add `getExpenseById(id: String)` and `getUserById(id: String)` for conflict resolution checks.
+- Add `@Transaction` method for `updateUserWithSync`.
+- Add `@Transaction` method for `deleteExpenseWithSync` (to handle tombstones atomically).
 
 ---
 
-### Logic Layer (Sync)
+### Logic Layer (Event Processor)
 
-#### [NEW] [EventProcessor.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/sync/EventProcessor.kt)
-Create a centralized processor with the following structure:
-- **`processIncomingEvent(event: SyncEvent)`**: The entry point.
-    1. Checks if the `eventId` already exists in the ledger (Deduplication).
-    2. Routes the event to specific handlers based on `type`.
-    3. Saves the event to the ledger and updates the state tables in a single **Transaction**.
-- **Handlers**:
-    - `handleAddTrip`: Parses payload to `Group` and `User` list.
-    - `handleAddExpense`: Parses payload to `Expense`.
-    - `handleUpdateExpense`: Implements tie-breaking logic (Timestamp > Lexicographical ID) before updating.
-    - `handleDeleteExpense`: Marks the expense as `isDeleted`.
-    - `handleUpdateUserName`: Updates participant names.
+#### [MODIFY] [EventProcessor.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/sync/EventProcessor.kt)
+- **Implement `isIncomingWinner(incoming: SyncEvent, currentEventId: String?)`**:
+    - Fetches the `SyncEvent` associated with `currentEventId`.
+    - Returns `true` if `incoming.createdAt > current.createdAt`.
+    - If timestamps are equal, returns `true` if `incoming.eventId > current.eventId` (Lexicographical tie-break).
+- **Refine `handleAddExpense`**:
+    - Check if expense already exists. If it exists and is marked `isDeleted`, and the incoming event is "older" than the delete event, ignore the add.
+- **Refine `handleDeleteExpense`**:
+    - If the expense doesn't exist yet, create a "tombstone" record (isDeleted=true) to prevent future out-of-order adds from resurrecting it.
+- **Refine `handleUpdateExpense`**:
+    - Use `isIncomingWinner` to ensure we don't overwrite a newer state with an older one received late.
 
 ---
 
-### Repository Integration
+### Repository
 
 #### [MODIFY] [LocalRepository.kt](file:///C:/Users/dnime/AndroidStudioProjects/Divide/app/src/main/java/com/example/divide/data/LocalRepository.kt)
-- Provide a reference to the `EventProcessor`.
-- This allows the future networking layer to simply call `LocalRepository.processor.processIncomingEvent(event)`.
+- Update local write methods (`addExpense`, etc.) to generate and store the `lastEventId` immediately upon creation.
 
 ## Verification Plan
 
 ### Automated Tests
-- **[NEW] [EventProcessorTest.kt]**:
-    - Test deduplication: Send the same event twice and verify the payload is only applied once.
-    - Test tie-breaking: Send an "older" update after a "newer" one and verify the database keeps the newer state.
-
-### Manual Verification
-- Since networking isn't built yet, we can verify this by manually "injecting" a mock `SyncEvent` into the processor via a temporary test button or logcat command.
+- **[MODIFY] [EventProcessorTest.kt]**:
+    - **Test Late Arrival**: Send a "New" update, then an "Old" update. Verify the DB keeps the "New" values.
+    - **Test Tombstone**: Send a "Delete", then an "Add". Verify the item remains deleted.
+    - **Test Tie-Break**: Send two events with the exact same timestamp but different `eventId`s. Verify the winner is consistent.

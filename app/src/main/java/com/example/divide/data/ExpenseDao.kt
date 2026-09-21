@@ -92,4 +92,13 @@ interface ExpenseDao {
         updateExpense(expense)
         insertSyncEvent(syncEvent)
     }
+
+    /**
+     * Atomically updates a user and logs the sync event.
+     */
+    @Transaction
+    suspend fun updateUserWithSync(user: User, syncEvent: SyncEvent) {
+        insertUser(user)
+        insertSyncEvent(syncEvent)
+    }
 }
