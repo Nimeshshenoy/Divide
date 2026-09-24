@@ -1,0 +1,63 @@
+package com.example.divide.sync.protocol
+
+import com.example.divide.data.SyncEvent
+
+/**
+ * Every wireless message gets wrapped in this.
+ *
+ * IMPORTANT:
+ * NetworkMessage != SyncEvent
+ *
+ * NetworkMessage:
+ * "Hey, give me these events"
+ *
+ * SyncEvent:
+ * "Bob added ₹500 dinner"
+ */
+data class NetworkMessage(
+    val type: String,
+    val payload: String
+)
+
+/**
+ * First message exchanged after two phones connect.
+ *
+ * Think:
+ * "Hello, I am this Divide user and I want to sync this group."
+ */
+data class HelloPayload(
+    val protocolVersion: Int = 1,
+    val userId: String,
+    val groupId: String
+)
+
+/**
+ * A list describing which historical events this phone already knows.
+ */
+data class EventIdsPayload(
+    val groupId: String,
+    val eventIds: List<String>
+)
+
+/**
+ * Requests exact events that this phone is missing.
+ */
+data class RequestEventsPayload(
+    val groupId: String,
+    val eventIds: List<String>
+)
+
+/**
+ * Contains the actual SyncEvents being transferred.
+ */
+data class EventBatchPayload(
+    val groupId: String,
+    val events: List<SyncEvent>
+)
+
+object MessageType {
+    const val HELLO = "HELLO"
+    const val EVENT_IDS = "EVENT_IDS"
+    const val REQUEST_EVENTS = "REQUEST_EVENTS"
+    const val EVENT_BATCH = "EVENT_BATCH"
+}

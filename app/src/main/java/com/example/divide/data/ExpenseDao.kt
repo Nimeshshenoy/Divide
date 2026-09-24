@@ -63,6 +63,25 @@ interface ExpenseDao {
     @Query("SELECT * FROM users WHERE id = :userId")
     suspend fun getUserById(userId: String): User?
 
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1
+            FROM users
+            WHERE id = :userId
+            AND groupId = :groupId
+        )
+    """)
+    suspend fun isUserMemberOfGroup(
+        userId: String,
+        groupId: String
+    ): Boolean
+
+    @Query("SELECT eventId FROM sync_events WHERE groupId = :groupId")
+    suspend fun getSyncEventIdsForGroup(groupId: String): List<String>
+
+    @Query("SELECT * FROM sync_events WHERE groupId = :groupId AND eventId IN (:eventIds)")
+    suspend fun getSyncEventsByIds(groupId: String, eventIds: List<String>): List<SyncEvent>
+
     // --- ATOMIC TRANSACTIONAL OPERATIONS (Task 1) ---
 
     /**
