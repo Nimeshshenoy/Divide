@@ -11,10 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class NearbyManager(
-    context: Context,
+    private val context: Context,
     private val localEndpointName: String,
     private val onMessageReceived:
-        suspend (endpointId: String, message: NetworkMessage) -> Unit
+        suspend (endpointId: String, message: NetworkMessage) -> Unit,
+    private val onConnected: ((endpointId: String) -> Unit)? = null
 ) {
 
     companion object {
@@ -51,6 +52,10 @@ class NearbyManager(
     // =========================================================
 
     fun startAdvertising() {
+        if (!NearbyPermissions.hasRequiredPermissions(context)) {
+            Log.e(TAG, "Cannot start advertising: missing required runtime permissions")
+            return
+        }
 
         val options =
             AdvertisingOptions.Builder()
@@ -90,6 +95,10 @@ class NearbyManager(
     // =========================================================
 
     fun startDiscovery() {
+        if (!NearbyPermissions.hasRequiredPermissions(context)) {
+            Log.e(TAG, "Cannot start discovery: missing required runtime permissions")
+            return
+        }
 
         val options =
             DiscoveryOptions.Builder()
@@ -226,16 +235,12 @@ class NearbyManager(
                         connectedEndpoints +=
                             endpointId
 
-                        /*
-                         * Actual connection now exists.
-                         *
-                         * THIS is where later you'll initiate HELLO.
-                         */
-
                         Log.d(
                             TAG,
                             "CONNECTED: $endpointId"
                         )
+
+                        onConnected?.invoke(endpointId)
                     }
 
                     else -> {
