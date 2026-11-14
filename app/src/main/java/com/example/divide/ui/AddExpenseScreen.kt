@@ -1,17 +1,22 @@
 package com.example.divide.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -20,6 +25,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.divide.data.Expense
 import com.example.divide.data.LocalRepository
+import com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,6 +37,7 @@ import java.util.Locale
 @Composable
 fun AddExpenseScreen(
     tripId: String,
+    syncViewModel: SyncViewModel,
     onBack: () -> Unit
 ) {
     // Observe the list of trips (with details) and current profile
@@ -62,12 +69,75 @@ fun AddExpenseScreen(
     
     val dateFormatter = remember { SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()) }
 
+    val syncState by syncViewModel.syncState.collectAsState()
+    var showSyncDialog by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberNearbyPermissionsLauncher(
+        onPermissionsGranted = { showSyncDialog = true }
+    )
+
+    if (showSyncDialog) {
+        AlertDialog(
+            onDismissRequest = { showSyncDialog = false },
+            title = { Text("Sync Trip") },
+            text = { Text("Do you want to host this trip for others to join, or join an existing host?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    syncViewModel.startHosting(tripId)
+                    showSyncDialog = false
+                }) { Text("Host") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    syncViewModel.startJoining(tripId)
+                    showSyncDialog = false
+                }) { Text("Join") }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("${group.name} Expenses") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
+                },
+                actions = {
+                    val tint = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current
+                    TextButton(onClick = {
+                        if (syncState == SyncState.IDLE) {
+                            permissionLauncher()
+                        } else {
+                            syncViewModel.stopSync()
+                        }
+                    }) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    color = if (syncState == SyncState.CONNECTED) Color.Green else Color.Red,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = if (syncState == SyncState.IDLE) Icons.Default.Sync else Icons.Default.Close,
+                            contentDescription = "Sync",
+                            tint = tint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = when (syncState) {
+                                SyncState.IDLE -> "Sync"
+                                SyncState.ADVERTISING -> "Hosting"
+                                SyncState.DISCOVERING -> "Searching"
+                                SyncState.CONNECTED -> "Connected"
+                            },
+                            color = tint
+                        )
+                    }
                 }
             )
         }

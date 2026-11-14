@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.divide.data.LocalRepository
 import com.example.divide.data.TripWithDetails
+import com.example.divide.logic.SplitLogic
+import com.example.divide.logic.UserSettlementStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,7 +27,7 @@ import java.util.Locale
 /**
  * The main landing screen of the app.
  * Displays a large button to create a new trip and lists existing trips
- * categorized by their settlement status.
+ * categorized by their settlement status along with local settlement details.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +87,14 @@ fun MainScreen(
                     SectionHeader("unsettled expenses")
                 }
                 items(unsettled) { tripDetails ->
-                    TripItem(tripDetails) { onTripClick(tripDetails.group.id) }
+                    val settlements = remember(tripDetails) {
+                        SplitLogic.getLocalUserSettlements(tripDetails)
+                    }
+                    TripItem(
+                        tripDetails = tripDetails,
+                        settlements = settlements,
+                        onClick = { onTripClick(tripDetails.group.id) }
+                    )
                 }
                 
                 item { Spacer(modifier = Modifier.height(32.dp)) }
@@ -95,7 +104,14 @@ fun MainScreen(
                     SectionHeader("settled expenses")
                 }
                 items(settled) { tripDetails ->
-                    TripItem(tripDetails) { onTripClick(tripDetails.group.id) }
+                    val settlements = remember(tripDetails) {
+                        SplitLogic.getLocalUserSettlements(tripDetails)
+                    }
+                    TripItem(
+                        tripDetails = tripDetails,
+                        settlements = settlements,
+                        onClick = { onTripClick(tripDetails.group.id) }
+                    )
                 }
             }
         }
@@ -118,10 +134,14 @@ fun SectionHeader(text: String) {
 
 /**
  * Represents a single trip card in the list.
- * Shows the trip name, total accumulated cost, and creation info.
+ * Shows the trip name, total cost, creation info, and settlement breakdown for the local user.
  */
 @Composable
-fun TripItem(tripDetails: TripWithDetails, onClick: () -> Unit) {
+fun TripItem(
+    tripDetails: TripWithDetails,
+    settlements: List<UserSettlementStatus>,
+    onClick: () -> Unit
+) {
     val group = tripDetails.group
     
     // Calculate the sum of all ACTIVE (non-deleted) individual expenses belonging to this trip
@@ -143,28 +163,65 @@ fun TripItem(tripDetails: TripWithDetails, onClick: () -> Unit) {
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
         ) {
-            Column {
-                Text(text = group.name, style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = group.name, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "created on $formattedDate by $creatorName",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // Displays the aggregate total for the trip
                 Text(
-                    text = "created on $formattedDate by $creatorName",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "₹${"%.2f".format(totalAmount)}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            // Displays the aggregate total for the trip
-            Text(
-                text = "₹${"%.2f".format(totalAmount)}",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Settlements breakdown sub-section
+            Column(modifier = Modifier.fillMaxWidth()) {
+                settlements.forEach { settlement ->
+                    when (settlement) {
+                        is UserSettlementStatus.Owes -> {
+                            Text(
+                                text = "You owe ${settlement.toUser.name} ₹${"%.2f".format(settlement.amountRupees)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        is UserSettlementStatus.Owed -> {
+                            Text(
+                                text = "${settlement.fromUser.name} owes You ₹${"%.2f".format(settlement.amountRupees)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        is UserSettlementStatus.SettledUp -> {
+                            Text(
+                                text = "You are settled up",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

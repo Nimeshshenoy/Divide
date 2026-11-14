@@ -10,11 +10,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.activity.viewModels
 import com.example.divide.data.ExpenseDatabase
 import com.example.divide.data.LocalRepository
 import com.example.divide.ui.AddExpenseScreen
 import com.example.divide.ui.MainScreen
 import com.example.divide.ui.ProfileScreen
+import com.example.divide.ui.SyncViewModel
 import com.example.divide.ui.TripSetupScreen
 import com.example.divide.ui.theme.DivideTheme
 
@@ -22,6 +24,9 @@ import com.example.divide.ui.theme.DivideTheme
  * The main activity of the application.
  */
 class MainActivity : ComponentActivity() {
+
+    private val syncViewModel: SyncViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
@@ -32,7 +37,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             DivideTheme {
-                DivideApp()
+                DivideApp(syncViewModel)
             }
         }
     }
@@ -42,7 +47,7 @@ class MainActivity : ComponentActivity() {
  * Root Composable for the app's navigation graph.
  */
 @Composable
-fun DivideApp() {
+fun DivideApp(syncViewModel: SyncViewModel) {
     val navController = rememberNavController()
     
     NavHost(navController = navController, startDestination = "main") {
@@ -89,6 +94,7 @@ fun DivideApp() {
             val tripId = backStackEntry.arguments?.getString("tripId") ?: return@composable
             AddExpenseScreen(
                 tripId = tripId,
+                syncViewModel = syncViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
