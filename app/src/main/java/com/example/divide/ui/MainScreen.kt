@@ -1,5 +1,8 @@
 package com.example.divide.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,12 +15,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.divide.data.LocalRepository
 import com.example.divide.data.TripWithDetails
+import com.example.divide.data.User
 import com.example.divide.logic.SplitLogic
 import com.example.divide.logic.UserSettlementStatus
 import java.text.SimpleDateFormat
@@ -27,7 +32,7 @@ import java.util.Locale
 /**
  * The main landing screen of the app.
  * Displays a large button to create a new trip and lists existing trips
- * categorized by their settlement status along with local settlement details.
+ * categorized by their settlement status along with local settlement details and UPI payments.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +47,10 @@ fun MainScreen(
     // Separate trips into Unsettled and Settled categories based on the 'group' metadata
     val unsettled = trips.filter { !it.group.isSettled }
     val settled = trips.filter { it.group.isSettled }
+
+    // Dialog State for Payments
+    var activePayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
+    var missingUpiUser by remember { mutableStateOf<User?>(null) }
 
     Scaffold(
         topBar = {
@@ -93,7 +102,14 @@ fun MainScreen(
                     TripItem(
                         tripDetails = tripDetails,
                         settlements = settlements,
-                        onClick = { onTripClick(tripDetails.group.id) }
+                        onClick = { onTripClick(tripDetails.group.id) },
+                        onPayClick = { user, amount ->
+                            if (!user.upiId.isNullOrBlank()) {
+                                activePayUser = user to amount
+                            } else {
+                                missingUpiUser = user
+                            }
+                        }
                     )
                 }
                 
@@ -110,11 +126,94 @@ fun MainScreen(
                     TripItem(
                         tripDetails = tripDetails,
                         settlements = settlements,
-                        onClick = { onTripClick(tripDetails.group.id) }
+                        onClick = { onTripClick(tripDetails.group.id) },
+                        onPayClick = { user, amount ->
+                            if (!user.upiId.isNullOrBlank()) {
+                                activePayUser = user to amount
+                            } else {
+                                missingUpiUser = user
+                            }
+                        }
                     )
                 }
             }
         }
+    }
+
+    // Payment Dialog with Generated QR Code
+    activePayUser?.let { (toUser, amount) ->
+        val upiUri = remember(toUser, amount) {
+            QrCodeUtils.createUpiUri(toUser.upiId ?: "", toUser.name, amount)
+        }
+        val qrBitmap = remember(upiUri) {
+            QrCodeUtils.generateQrCodeBitmap(upiUri, 512)
+        }
+        val context = LocalContext.current
+
+        AlertDialog(
+            onDismissRequest = { activePayUser = null },
+            title = { Text("Pay ${toUser.name}") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Amount: ₹${"%.2f".format(amount)}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    qrBitmap?.let { bitmap ->
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "UPI Payment QR Code",
+                            modifier = Modifier.size(220.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "UPI ID: ${toUser.upiId}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(upiUri))
+                            context.startActivity(Intent.createChooser(intent, "Pay via UPI"))
+                        } catch (e: Exception) {
+                            // Handled gracefully if no UPI app installed
+                        }
+                    }
+                ) {
+                    Text("Open UPI App")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { activePayUser = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Missing UPI ID Dialog
+    missingUpiUser?.let { user ->
+        AlertDialog(
+            onDismissRequest = { missingUpiUser = null },
+            title = { Text("No UPI ID Set") },
+            text = { Text("${user.name} has not set up their UPI payment ID yet.") },
+            confirmButton = {
+                TextButton(onClick = { missingUpiUser = null }) {
+                    Text("OK")
+                }
+            }
+        )
     }
 }
 
@@ -134,13 +233,14 @@ fun SectionHeader(text: String) {
 
 /**
  * Represents a single trip card in the list.
- * Shows the trip name, total cost, creation info, and settlement breakdown for the local user.
+ * Shows the trip name, total cost, creation info, settlement breakdown, and a Pay button.
  */
 @Composable
 fun TripItem(
     tripDetails: TripWithDetails,
     settlements: List<UserSettlementStatus>,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPayClick: (toUser: User, amount: Double) -> Unit
 ) {
     val group = tripDetails.group
     
@@ -197,26 +297,44 @@ fun TripItem(
                 settlements.forEach { settlement ->
                     when (settlement) {
                         is UserSettlementStatus.Owes -> {
-                            Text(
-                                text = "You owe ${settlement.toUser.name} ₹${"%.2f".format(settlement.amountRupees)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.error
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "You owe ${settlement.toUser.name} ₹${"%.2f".format(settlement.amountRupees)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedButton(
+                                    onClick = { onPayClick(settlement.toUser, settlement.amountRupees) },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text("Pay ${settlement.toUser.name}", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
                         }
                         is UserSettlementStatus.Owed -> {
                             Text(
                                 text = "${settlement.fromUser.name} owes You ₹${"%.2f".format(settlement.amountRupees)}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
                         is UserSettlementStatus.SettledUp -> {
                             Text(
                                 text = "You are settled up",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
                     }

@@ -2,7 +2,6 @@ package com.example.divide.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-
 import java.util.UUID
 
 /**
@@ -15,5 +14,6 @@ data class Profile(
     @PrimaryKey
     val id: Int = 0,
     val userId: String = UUID.randomUUID().toString(), // Distributed Identity
-    val name: String = "Me"
+    val name: String = "Me",
+    val upiId: String? = null
 )

@@ -93,8 +93,8 @@ class EventProcessor(
             "DELETE_EXPENSE" ->
                 handleDeleteExpense(event)
 
-            "UPDATE_USER_NAME" ->
-                handleUpdateUserName(event)
+            "UPDATE_USER_NAME", "UPDATE_USER" ->
+                handleUpdateUser(event)
 
             else -> {
                 // Unknown protocol event.
@@ -522,10 +522,10 @@ class EventProcessor(
     }
 
     // =============================================================
-    // UPDATE USER NAME
+    // UPDATE USER (Name & UPI ID)
     // =============================================================
 
-    private suspend fun handleUpdateUserName(
+    private suspend fun handleUpdateUser(
         event: SyncEvent
     ): Boolean {
 

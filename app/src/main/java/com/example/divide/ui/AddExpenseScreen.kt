@@ -1,6 +1,7 @@
 package com.example.divide.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -289,12 +290,20 @@ fun AddExpenseScreen(
                 tripDetails.expenses.filter { !it.isDeleted }
             }
             
+            var expandedExpenseId by remember { mutableStateOf<String?>(null) }
+
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(activeExpenses) { expense ->
+                    val isExpanded = expandedExpenseId == expense.id
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)
+                            .clickable {
+                                expandedExpenseId = if (isExpanded) null else expense.id
+                            },
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -309,6 +318,26 @@ fun AddExpenseScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(text = "₹${"%.2f".format(expense.amount)}", fontWeight = FontWeight.Bold)
+
+                                if (isExpanded) {
+                                    val payerName = displayUsers.find { it.id == expense.payerId }?.name ?: "Unknown"
+                                    val sharedNames = displayUsers
+                                        .filter { expense.participantIds.contains(it.id) }
+                                        .joinToString(", ") { it.name }
+                                        .ifEmpty { "None" }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "paid by: $payerName",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "shared by: $sharedNames",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             IconButton(onClick = {
                                 editingExpenseId = expense.id

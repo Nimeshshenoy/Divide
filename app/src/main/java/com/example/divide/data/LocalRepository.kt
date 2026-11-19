@@ -114,35 +114,40 @@ object LocalRepository {
     }
 
     /**
-     * Updates the local user's name across the profile and all active trips.
+     * Updates the local user's name and UPI ID across the profile and all active trips.
      * Logs a SyncEvent for each trip so friends stay informed.
      */
-    fun updateProfile(newName: String) {
+    fun updateProfile(newName: String, newUpiId: String? = profile.value.upiId) {
         val oldProfile = profile.value
-        if (oldProfile.name == newName) return
 
         scope.launch {
+            val formattedUpi = newUpiId?.trim()?.ifEmpty { null }
             // 1. Update the primary profile
-            dao?.insertProfile(oldProfile.copy(name = newName))
+            val updatedProfile = oldProfile.copy(
+                name = newName,
+                upiId = formattedUpi
+            )
+            dao?.insertProfile(updatedProfile)
 
-            // 2. Propagate the name change to all trips the user is part of
+            // 2. Propagate the change to all trips the user is part of
             val allTrips = trips.value
             allTrips.forEach { tripDetails ->
                 val localUser = tripDetails.users.find { it.isLocalPlayer }
                 if (localUser != null) {
+                    val updatedUser = localUser.copy(
+                        name = newName,
+                        upiId = formattedUpi
+                    )
+                    
                     val syncEvent = SyncEvent(
                         groupId = tripDetails.group.id,
                         authorId = oldProfile.userId,
-                        type = "UPDATE_USER_NAME",
-                        payload = gson.toJson(localUser.copy(name = newName))
+                        type = "UPDATE_USER",
+                        payload = gson.toJson(updatedUser)
                     )
                     
-                    val updatedUser = localUser.copy(
-                        name = newName,
-                        lastEventId = syncEvent.eventId
-                    )
-                    
-                    dao?.updateUserWithSync(updatedUser, syncEvent)
+                    val userWithEvent = updatedUser.copy(lastEventId = syncEvent.eventId)
+                    dao?.updateUserWithSync(userWithEvent, syncEvent)
                 }
             }
         }

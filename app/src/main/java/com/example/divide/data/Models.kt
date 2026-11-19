@@ -35,6 +35,7 @@ data class User(
     val name: String,
     val groupId: String, // Links this participant record to a specific group
     val isLocalPlayer: Boolean = false, // Identifies the device owner
+    val upiId: String? = null,
     val lastEventId: String? = null // ID of the SyncEvent that last updated this user
 )
 

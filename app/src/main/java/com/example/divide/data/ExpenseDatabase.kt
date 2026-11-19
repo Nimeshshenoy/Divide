@@ -14,7 +14,7 @@ import androidx.room.TypeConverters
         SyncEvent::class,
         Profile::class
     ],
-    version = 8, // Bumped for lastEventId fields
+    version = 9, // Bumped for upiId fields
     exportSchema = false
 )
 @TypeConverters(Converters::class)
