@@ -13,7 +13,8 @@ import com.google.gson.Gson
  */
 class MessageRouter(
     private val syncProtocol: SyncProtocol,
-    private val expectedGroupId: String
+    private val expectedGroupId: String,
+    private val onPaymentInfoResponseReceived: ((PaymentInfoResponsePayload) -> Unit)? = null
 ) {
 
     private val gson = Gson()
@@ -44,15 +45,6 @@ class MessageRouter(
                 if (hello.groupId != expectedGroupId) {
                     return null
                 }
-
-                /*
-                 * Later:
-                 *
-                 * verify cryptographic identity here.
-                 *
-                 * For now, your EventProcessor membership checks
-                 * protect the actual SyncEvents.
-                 */
 
                 syncProtocol
                     .createEventIdsMessage(
@@ -123,6 +115,48 @@ class MessageRouter(
                     )
 
                 // No immediate reply required.
+                null
+            }
+
+            MessageType.REQUEST_PAYMENT_INFO -> {
+
+                val request =
+                    gson.fromJson(
+                        message.payload,
+                        RequestPaymentInfoPayload::class.java
+                    )
+
+                if (
+                    request.groupId !=
+                    expectedGroupId
+                ) {
+                    return null
+                }
+
+                syncProtocol
+                    .createPaymentInfoResponse(
+                        request
+                    )
+            }
+
+            MessageType.PAYMENT_INFO_RESPONSE -> {
+
+                val response =
+                    gson.fromJson(
+                        message.payload,
+                        PaymentInfoResponsePayload::class.java
+                    )
+
+                if (
+                    response.groupId !=
+                    expectedGroupId
+                ) {
+                    return null
+                }
+
+                onPaymentInfoResponseReceived?.invoke(response)
+
+                // No immediate network reply required
                 null
             }
 

@@ -37,6 +37,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
+    syncViewModel: SyncViewModel? = null,
     onCreateTrip: () -> Unit,
     onTripClick: (String) -> Unit,
     onProfileClick: () -> Unit
@@ -51,6 +52,56 @@ fun MainScreen(
     // Dialog State for Payments
     var activePayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
     var missingUpiUser by remember { mutableStateOf<User?>(null) }
+
+    // Observe Sync ViewModel State for Live Payment Info Requests
+    val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
+    val paymentInfoState = syncViewModel?.paymentInfoState?.collectAsState()?.value ?: PaymentInfoState.Idle
+
+    // Handle incoming live payment info response
+    LaunchedEffect(paymentInfoState) {
+        val state = paymentInfoState
+        if (state is PaymentInfoState.Success) {
+            val payload = state.payload
+            if (!payload.upiId.isNullOrBlank()) {
+                activePayUser = User(
+                    id = payload.payeeUserId,
+                    name = payload.payeeName,
+                    groupId = payload.groupId,
+                    upiId = payload.upiId
+                ) to payload.amountRupees
+            } else {
+                missingUpiUser = User(
+                    id = payload.payeeUserId,
+                    name = payload.payeeName,
+                    groupId = payload.groupId
+                )
+            }
+            syncViewModel?.clearPaymentInfoState()
+        } else if (state is PaymentInfoState.Error) {
+            syncViewModel?.clearPaymentInfoState()
+        }
+    }
+
+    val handlePayClick: (User, Double) -> Unit = { user, amount ->
+        val isConnected = syncState == SyncState.CONNECTED
+        var liveRequested = false
+
+        if (isConnected && syncViewModel != null) {
+            liveRequested = syncViewModel.requestLivePaymentInfo(
+                targetPayeeUserId = user.id,
+                amountRupees = amount
+            )
+        }
+
+        // Offline / disconnected fallback
+        if (!liveRequested) {
+            if (!user.upiId.isNullOrBlank()) {
+                activePayUser = user to amount
+            } else {
+                missingUpiUser = user
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -103,13 +154,7 @@ fun MainScreen(
                         tripDetails = tripDetails,
                         settlements = settlements,
                         onClick = { onTripClick(tripDetails.group.id) },
-                        onPayClick = { user, amount ->
-                            if (!user.upiId.isNullOrBlank()) {
-                                activePayUser = user to amount
-                            } else {
-                                missingUpiUser = user
-                            }
-                        }
+                        onPayClick = handlePayClick
                     )
                 }
                 
@@ -127,13 +172,7 @@ fun MainScreen(
                         tripDetails = tripDetails,
                         settlements = settlements,
                         onClick = { onTripClick(tripDetails.group.id) },
-                        onPayClick = { user, amount ->
-                            if (!user.upiId.isNullOrBlank()) {
-                                activePayUser = user to amount
-                            } else {
-                                missingUpiUser = user
-                            }
-                        }
+                        onPayClick = handlePayClick
                     )
                 }
             }

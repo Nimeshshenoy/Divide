@@ -52,7 +52,7 @@ object LocalRepository {
         scope.launch {
             val syncEvent = SyncEvent(
                 groupId = group.id,
-                authorId = creators.firstOrNull { it.isLocalPlayer }?.id ?: "local",
+                authorId = profile.value.userId, // Persistent distributed identity
                 type = "ADD_TRIP",
                 payload = gson.toJson(mapOf("group" to group, "users" to creators))
             )

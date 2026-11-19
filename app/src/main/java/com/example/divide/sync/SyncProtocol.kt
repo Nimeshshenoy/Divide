@@ -1,6 +1,7 @@
 package com.example.divide.sync
 
 import com.example.divide.data.ExpenseDao
+import com.example.divide.data.Profile
 import com.example.divide.sync.protocol.*
 import com.google.gson.Gson
 
@@ -14,7 +15,8 @@ import com.google.gson.Gson
 class SyncProtocol(
     private val dao: ExpenseDao,
     private val eventProcessor: EventProcessor,
-    private val localUserId: String
+    private val localUserId: String,
+    private val getLocalProfile: (() -> Profile?)? = null
 ) {
 
     private val gson = Gson()
@@ -150,5 +152,52 @@ class SyncProtocol(
 
             eventProcessor.processIncomingEvent(event)
         }
+    }
+
+    /**
+     * Creates an on-demand message requesting payment details for a specific payee.
+     */
+    fun createPaymentInfoRequest(
+        groupId: String,
+        targetPayeeUserId: String,
+        amountRupees: Double
+    ): NetworkMessage {
+        val payload = RequestPaymentInfoPayload(
+            groupId = groupId,
+            requestingUserId = localUserId,
+            targetPayeeUserId = targetPayeeUserId,
+            amountRupees = amountRupees
+        )
+        return NetworkMessage(
+            type = MessageType.REQUEST_PAYMENT_INFO,
+            payload = gson.toJson(payload)
+        )
+    }
+
+    /**
+     * Responds to an incoming payment info request with local UPI details.
+     */
+    fun createPaymentInfoResponse(
+        request: RequestPaymentInfoPayload
+    ): NetworkMessage? {
+        val profile = getLocalProfile?.invoke() ?: return null
+
+        // Verify request target matches local user
+        if (request.targetPayeeUserId != profile.userId && request.targetPayeeUserId != localUserId) {
+            return null
+        }
+
+        val response = PaymentInfoResponsePayload(
+            groupId = request.groupId,
+            payeeUserId = profile.userId,
+            payeeName = profile.name,
+            upiId = profile.upiId,
+            amountRupees = request.amountRupees
+        )
+
+        return NetworkMessage(
+            type = MessageType.PAYMENT_INFO_RESPONSE,
+            payload = gson.toJson(response)
+        )
     }
 }

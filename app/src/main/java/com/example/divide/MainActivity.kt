@@ -54,6 +54,7 @@ fun DivideApp(syncViewModel: SyncViewModel) {
         // Main Screen: Summary of all trips
         composable("main") {
             MainScreen(
+                syncViewModel = syncViewModel,
                 onCreateTrip = { navController.navigate("setup_trip") },
                 onTripClick = { tripId -> navController.navigate("add_expense/$tripId") },
                 onProfileClick = { navController.navigate("profile") }

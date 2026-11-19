@@ -53,9 +53,9 @@ fun AddExpenseScreen(
     var expenseName by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     
-    // Adjust local player's name based on current profile
+    // Adjust local player's name and upiId based on current profile
     val displayUsers = remember(tripDetails.users, profile) {
-        tripDetails.users.map { if (it.isLocalPlayer) it.copy(name = profile.name) else it }
+        tripDetails.users.map { if (it.isLocalPlayer) it.copy(name = profile.name, upiId = profile.upiId) else it }
     }
 
     var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.firstOrNull() ?: displayUsers.first()) }

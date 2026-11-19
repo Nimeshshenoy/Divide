@@ -55,9 +55,32 @@ data class EventBatchPayload(
     val events: List<SyncEvent>
 )
 
+/**
+ * Requests live payment details from a target payee.
+ */
+data class RequestPaymentInfoPayload(
+    val groupId: String,
+    val requestingUserId: String,
+    val targetPayeeUserId: String,
+    val amountRupees: Double
+)
+
+/**
+ * Returns live payment details from the target payee.
+ */
+data class PaymentInfoResponsePayload(
+    val groupId: String,
+    val payeeUserId: String,
+    val payeeName: String,
+    val upiId: String?,
+    val amountRupees: Double
+)
+
 object MessageType {
     const val HELLO = "HELLO"
     const val EVENT_IDS = "EVENT_IDS"
     const val REQUEST_EVENTS = "REQUEST_EVENTS"
     const val EVENT_BATCH = "EVENT_BATCH"
+    const val REQUEST_PAYMENT_INFO = "REQUEST_PAYMENT_INFO"
+    const val PAYMENT_INFO_RESPONSE = "PAYMENT_INFO_RESPONSE"
 }

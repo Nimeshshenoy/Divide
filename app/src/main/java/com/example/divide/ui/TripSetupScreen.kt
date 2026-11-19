@@ -42,10 +42,11 @@ fun TripSetupScreen(
         mutableStateOf(
             existingTripDetails?.users ?: listOf(
                 User(
-                    id = UUID.randomUUID().toString(),
+                    id = profile.userId, // Persistent distributed identity
                     name = profile.name,
                     groupId = tripId ?: "pending", // Will be updated on save if new
-                    isLocalPlayer = true
+                    isLocalPlayer = true,
+                    upiId = profile.upiId
                 )
             )
         ) 
