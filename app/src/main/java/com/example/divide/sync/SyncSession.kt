@@ -16,6 +16,10 @@ class SyncSession(
     private lateinit var nearbyManager: NearbyManager
     private var lastConnectedEndpointId: String? = null
 
+    // Pending payment request correlation state
+    private var pendingPaymentRequestId: String? = null
+    private var pendingTargetPayeeUserId: String? = null
+
     var onPaymentInfoResponse: ((PaymentInfoResponsePayload) -> Unit)? = null
 
     private val router =
@@ -23,7 +27,7 @@ class SyncSession(
             syncProtocol = syncProtocol,
             expectedGroupId = groupId,
             onPaymentInfoResponseReceived = { response ->
-                onPaymentInfoResponse?.invoke(response)
+                validateAndProcessPaymentResponse(response)
             }
         )
 
@@ -71,20 +75,53 @@ class SyncSession(
         )
     }
 
+    fun onDisconnected(
+        endpointId: String
+    ) {
+        if (lastConnectedEndpointId == endpointId) {
+            lastConnectedEndpointId = null
+            clearPendingPaymentRequest()
+        }
+    }
+
     /**
-     * Sends an on-demand request for payment details to the connected peer.
+     * Sends an on-demand request for payment details to the connected peer and tracks correlation ID.
      */
     fun requestPaymentInfo(
         targetPayeeUserId: String,
         amountRupees: Double
     ): Boolean {
         val endpointId = lastConnectedEndpointId ?: return false
-        val requestMsg = syncProtocol.createPaymentInfoRequest(
+        val (requestId, requestMsg) = syncProtocol.createPaymentInfoRequest(
             groupId = groupId,
             targetPayeeUserId = targetPayeeUserId,
             amountRupees = amountRupees
         )
-        nearbyManager.send(endpointId, requestMsg)
+        val sent = nearbyManager.send(endpointId, requestMsg)
+        if (sent) {
+            pendingPaymentRequestId = requestId
+            pendingTargetPayeeUserId = targetPayeeUserId
+        }
+        return sent
+    }
+
+    fun clearPendingPaymentRequest() {
+        pendingPaymentRequestId = null
+        pendingTargetPayeeUserId = null
+    }
+
+    /**
+     * Validates incoming payment info response correlation (requestId and payeeUserId match).
+     */
+    private fun validateAndProcessPaymentResponse(response: PaymentInfoResponsePayload): Boolean {
+        if (pendingPaymentRequestId != null && response.requestId != pendingPaymentRequestId) {
+            return false
+        }
+        if (pendingTargetPayeeUserId != null && response.payeeUserId != pendingTargetPayeeUserId) {
+            return false
+        }
+        onPaymentInfoResponse?.invoke(response)
+        clearPendingPaymentRequest()
         return true
     }
 }

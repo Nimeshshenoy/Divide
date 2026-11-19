@@ -4,6 +4,7 @@ import com.example.divide.data.ExpenseDao
 import com.example.divide.data.Profile
 import com.example.divide.sync.protocol.*
 import com.google.gson.Gson
+import java.util.UUID
 
 /**
  * Handles the LOGIC of synchronization.
@@ -155,20 +156,22 @@ class SyncProtocol(
     }
 
     /**
-     * Creates an on-demand message requesting payment details for a specific payee.
+     * Creates an on-demand message requesting payment details for a specific payee, returning the generated requestId.
      */
     fun createPaymentInfoRequest(
         groupId: String,
         targetPayeeUserId: String,
-        amountRupees: Double
-    ): NetworkMessage {
+        amountRupees: Double,
+        requestId: String = UUID.randomUUID().toString()
+    ): Pair<String, NetworkMessage> {
         val payload = RequestPaymentInfoPayload(
+            requestId = requestId,
             groupId = groupId,
             requestingUserId = localUserId,
             targetPayeeUserId = targetPayeeUserId,
             amountRupees = amountRupees
         )
-        return NetworkMessage(
+        return requestId to NetworkMessage(
             type = MessageType.REQUEST_PAYMENT_INFO,
             payload = gson.toJson(payload)
         )
@@ -177,17 +180,25 @@ class SyncProtocol(
     /**
      * Responds to an incoming payment info request with local UPI details.
      */
-    fun createPaymentInfoResponse(
+    suspend fun createPaymentInfoResponse(
         request: RequestPaymentInfoPayload
     ): NetworkMessage? {
         val profile = getLocalProfile?.invoke() ?: return null
 
-        // Verify request target matches local user
-        if (request.targetPayeeUserId != profile.userId && request.targetPayeeUserId != localUserId) {
+        val targetUser = dao.getUserById(request.targetPayeeUserId)
+        val localUserInGroup = dao.getLocalUserForGroup(request.groupId)
+
+        val isTargetLocalPlayer = request.targetPayeeUserId == profile.userId ||
+                request.targetPayeeUserId == localUserId ||
+                (targetUser != null && targetUser.isLocalPlayer) ||
+                (localUserInGroup != null && localUserInGroup.id == request.targetPayeeUserId)
+
+        if (!isTargetLocalPlayer) {
             return null
         }
 
         val response = PaymentInfoResponsePayload(
+            requestId = request.requestId,
             groupId = request.groupId,
             payeeUserId = profile.userId,
             payeeName = profile.name,

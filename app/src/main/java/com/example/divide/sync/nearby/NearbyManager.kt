@@ -15,7 +15,8 @@ class NearbyManager(
     private val localEndpointName: String,
     private val onMessageReceived:
         suspend (endpointId: String, message: NetworkMessage) -> Unit,
-    private val onConnected: ((endpointId: String) -> Unit)? = null
+    private val onConnected: ((endpointId: String) -> Unit)? = null,
+    private val onDisconnected: ((endpointId: String) -> Unit)? = null
 ) {
 
     companion object {
@@ -265,6 +266,8 @@ class NearbyManager(
                     TAG,
                     "Disconnected: $endpointId"
                 )
+
+                onDisconnected?.invoke(endpointId)
             }
         }
 
@@ -345,12 +348,12 @@ class NearbyManager(
     fun send(
         endpointId: String,
         message: NetworkMessage
-    ) {
+    ): Boolean {
 
         if (
             endpointId !in connectedEndpoints
         ) {
-            return
+            return false
         }
 
         val bytes =
@@ -359,19 +362,25 @@ class NearbyManager(
         val payload =
             Payload.fromBytes(bytes)
 
-        connectionsClient
-            .sendPayload(
-                endpointId,
-                payload
-            )
-            .addOnFailureListener { error ->
-
-                Log.e(
-                    TAG,
-                    "Send failed",
-                    error
+        return try {
+            connectionsClient
+                .sendPayload(
+                    endpointId,
+                    payload
                 )
-            }
+                .addOnFailureListener { error ->
+
+                    Log.e(
+                        TAG,
+                        "Send failed",
+                        error
+                    )
+                }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Send failed", e)
+            false
+        }
     }
 
     fun disconnectAll() {

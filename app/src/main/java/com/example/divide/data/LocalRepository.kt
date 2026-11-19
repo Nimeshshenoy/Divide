@@ -44,6 +44,14 @@ object LocalRepository {
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = Profile()
             )
+        scope.launch {
+            reconcileLocalUserIdentities(expenseDao)
+        }
+    }
+
+    private suspend fun reconcileLocalUserIdentities(expenseDao: ExpenseDao) {
+        val currentProfile = profile.value
+        expenseDao.reconcileLegacyLocalUserIds(currentProfile.userId)
     }
 
     // --- ATOMIC WRITE LOGIC ---

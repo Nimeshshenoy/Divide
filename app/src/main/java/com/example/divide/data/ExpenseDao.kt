@@ -82,6 +82,12 @@ interface ExpenseDao {
     @Query("SELECT * FROM sync_events WHERE groupId = :groupId AND eventId IN (:eventIds)")
     suspend fun getSyncEventsByIds(groupId: String, eventIds: List<String>): List<SyncEvent>
 
+    @Query("SELECT * FROM users WHERE groupId = :groupId AND isLocalPlayer = 1 LIMIT 1")
+    suspend fun getLocalUserForGroup(groupId: String): User?
+
+    @Query("UPDATE users SET id = :profileUserId WHERE isLocalPlayer = 1 AND id != :profileUserId")
+    suspend fun reconcileLegacyLocalUserIds(profileUserId: String)
+
     // --- ATOMIC TRANSACTIONAL OPERATIONS (Task 1) ---
 
     /**

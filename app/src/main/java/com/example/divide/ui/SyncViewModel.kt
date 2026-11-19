@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.divide.data.ExpenseDatabase
 import com.example.divide.data.LocalRepository
 import com.example.divide.sync.EventProcessor
@@ -11,8 +12,11 @@ import com.example.divide.sync.SyncProtocol
 import com.example.divide.sync.SyncSession
 import com.example.divide.sync.nearby.NearbyManager
 import com.example.divide.sync.protocol.PaymentInfoResponsePayload
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 enum class SyncState { IDLE, ADVERTISING, DISCOVERING, CONNECTED }
 
@@ -36,6 +40,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
 
     private var nearbyManager: NearbyManager? = null
     private var syncSession: SyncSession? = null
+    private var paymentTimeoutJob: Job? = null
 
     private fun setupSync(groupId: String, isHost: Boolean) {
         val localUserId = LocalRepository.profile.value.userId
@@ -47,6 +52,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         )
         val session = SyncSession(groupId, syncProtocol)
         session.onPaymentInfoResponse = { response ->
+            paymentTimeoutJob?.cancel()
             _paymentInfoState.value = PaymentInfoState.Success(response)
         }
 
@@ -59,6 +65,10 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
             onConnected = { endpointId ->
                 _syncState.value = SyncState.CONNECTED
                 session.onConnected(endpointId)
+            },
+            onDisconnected = { endpointId ->
+                session.onDisconnected(endpointId)
+                _syncState.value = SyncState.IDLE
             }
         )
         session.attachNearbyManager(manager)
@@ -87,20 +97,30 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
 
     fun requestLivePaymentInfo(targetPayeeUserId: String, amountRupees: Double): Boolean {
         val session = syncSession ?: return false
+        paymentTimeoutJob?.cancel()
         _paymentInfoState.value = PaymentInfoState.Requesting
         val sent = session.requestPaymentInfo(targetPayeeUserId, amountRupees)
         if (!sent) {
             _paymentInfoState.value = PaymentInfoState.Error("No active peer connection")
+        } else {
+            paymentTimeoutJob = viewModelScope.launch {
+                delay(5000L) // 5 second timeout for live response
+                if (_paymentInfoState.value is PaymentInfoState.Requesting) {
+                    _paymentInfoState.value = PaymentInfoState.Error("Payment request timed out")
+                }
+            }
         }
         return sent
     }
 
     fun clearPaymentInfoState() {
+        paymentTimeoutJob?.cancel()
         _paymentInfoState.value = PaymentInfoState.Idle
     }
 
     fun stopSync() {
         Log.d("SyncViewModel", "Stopping sync...")
+        paymentTimeoutJob?.cancel()
         nearbyManager?.disconnectAll()
         nearbyManager?.stopAdvertising()
         nearbyManager?.stopDiscovery()

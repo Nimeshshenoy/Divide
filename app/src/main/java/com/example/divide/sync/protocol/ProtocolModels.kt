@@ -1,6 +1,7 @@
 package com.example.divide.sync.protocol
 
 import com.example.divide.data.SyncEvent
+import java.util.UUID
 
 /**
  * Every wireless message gets wrapped in this.
@@ -59,6 +60,7 @@ data class EventBatchPayload(
  * Requests live payment details from a target payee.
  */
 data class RequestPaymentInfoPayload(
+    val requestId: String = UUID.randomUUID().toString(),
     val groupId: String,
     val requestingUserId: String,
     val targetPayeeUserId: String,
@@ -69,6 +71,7 @@ data class RequestPaymentInfoPayload(
  * Returns live payment details from the target payee.
  */
 data class PaymentInfoResponsePayload(
+    val requestId: String,
     val groupId: String,
     val payeeUserId: String,
     val payeeName: String,

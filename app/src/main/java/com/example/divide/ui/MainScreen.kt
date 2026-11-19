@@ -52,37 +52,52 @@ fun MainScreen(
     // Dialog State for Payments
     var activePayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
     var missingUpiUser by remember { mutableStateOf<User?>(null) }
+    var pendingPayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
 
     // Observe Sync ViewModel State for Live Payment Info Requests
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
     val paymentInfoState = syncViewModel?.paymentInfoState?.collectAsState()?.value ?: PaymentInfoState.Idle
 
-    // Handle incoming live payment info response
+    // Handle incoming live payment info response or timeout
     LaunchedEffect(paymentInfoState) {
-        val state = paymentInfoState
-        if (state is PaymentInfoState.Success) {
-            val payload = state.payload
-            if (!payload.upiId.isNullOrBlank()) {
-                activePayUser = User(
-                    id = payload.payeeUserId,
-                    name = payload.payeeName,
-                    groupId = payload.groupId,
-                    upiId = payload.upiId
-                ) to payload.amountRupees
-            } else {
-                missingUpiUser = User(
-                    id = payload.payeeUserId,
-                    name = payload.payeeName,
-                    groupId = payload.groupId
-                )
+        when (val state = paymentInfoState) {
+            is PaymentInfoState.Success -> {
+                val payload = state.payload
+                if (!payload.upiId.isNullOrBlank()) {
+                    activePayUser = User(
+                        id = payload.payeeUserId,
+                        name = payload.payeeName,
+                        groupId = payload.groupId,
+                        upiId = payload.upiId
+                    ) to payload.amountRupees
+                } else {
+                    missingUpiUser = User(
+                        id = payload.payeeUserId,
+                        name = payload.payeeName,
+                        groupId = payload.groupId
+                    )
+                }
+                pendingPayUser = null
+                syncViewModel?.clearPaymentInfoState()
             }
-            syncViewModel?.clearPaymentInfoState()
-        } else if (state is PaymentInfoState.Error) {
-            syncViewModel?.clearPaymentInfoState()
+            is PaymentInfoState.Error -> {
+                // Fall back to stored local DB info if available
+                pendingPayUser?.let { (user, amount) ->
+                    if (!user.upiId.isNullOrBlank()) {
+                        activePayUser = user to amount
+                    } else {
+                        missingUpiUser = user
+                    }
+                }
+                pendingPayUser = null
+                syncViewModel?.clearPaymentInfoState()
+            }
+            else -> {}
         }
     }
 
     val handlePayClick: (User, Double) -> Unit = { user, amount ->
+        pendingPayUser = user to amount
         val isConnected = syncState == SyncState.CONNECTED
         var liveRequested = false
 
@@ -100,6 +115,7 @@ fun MainScreen(
             } else {
                 missingUpiUser = user
             }
+            pendingPayUser = null
         }
     }
 
@@ -177,6 +193,51 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    // Requesting Payment Info Progress Dialog
+    if (paymentInfoState is PaymentInfoState.Requesting && pendingPayUser != null) {
+        AlertDialog(
+            onDismissRequest = {
+                syncViewModel?.clearPaymentInfoState()
+                pendingPayUser?.let { (user, amount) ->
+                    if (!user.upiId.isNullOrBlank()) {
+                        activePayUser = user to amount
+                    } else {
+                        missingUpiUser = user
+                    }
+                }
+                pendingPayUser = null
+            },
+            title = { Text("Requesting Payment Info") },
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                    Text("Contacting ${pendingPayUser?.first?.name}'s device...")
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        syncViewModel?.clearPaymentInfoState()
+                        pendingPayUser?.let { (user, amount) ->
+                            if (!user.upiId.isNullOrBlank()) {
+                                activePayUser = user to amount
+                            } else {
+                                missingUpiUser = user
+                            }
+                        }
+                        pendingPayUser = null
+                    }
+                ) {
+                    Text("Use Saved Info")
+                }
+            }
+        )
     }
 
     // Payment Dialog with Generated QR Code
