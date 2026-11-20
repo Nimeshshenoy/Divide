@@ -96,6 +96,9 @@ class EventProcessor(
             "UPDATE_USER_NAME", "UPDATE_USER" ->
                 handleUpdateUser(event)
 
+            "JOIN_TRIP", "ADD_USER" ->
+                handleJoinTrip(event)
+
             else -> {
                 // Unknown protocol event.
                 //
@@ -157,7 +160,7 @@ class EventProcessor(
      * ADD_TRIP is skipped because the group/membership doesn't exist yet.
      */
     private suspend fun isAuthorized(event: SyncEvent): Boolean {
-        if (event.type == "ADD_TRIP") {
+        if (event.type == "ADD_TRIP" || event.type == "JOIN_TRIP") {
             return true
         }
 
@@ -567,6 +570,48 @@ class EventProcessor(
         }
 
         // Losing rename is still part of history.
+        recordLosingEvent(event)
+
+        return false
+    }
+
+    // =============================================================
+    // JOIN TRIP / ADD USER
+    // =============================================================
+
+    private suspend fun handleJoinTrip(
+        event: SyncEvent
+    ): Boolean {
+
+        val incomingUser =
+            gson.fromJson(
+                event.payload,
+                User::class.java
+            ).copy(
+                groupId = event.groupId,
+                isLocalPlayer = false,
+                lastEventId = event.eventId
+            )
+
+        val existingUser =
+            dao.getUserById(
+                incomingUser.id
+            )
+
+        if (
+            isIncomingWinner(
+                event,
+                existingUser?.lastEventId
+            )
+        ) {
+            dao.updateUserWithSync(
+                incomingUser,
+                event
+            )
+
+            return true
+        }
+
         recordLosingEvent(event)
 
         return false

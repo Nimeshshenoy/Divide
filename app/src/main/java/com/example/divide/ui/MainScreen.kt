@@ -3,13 +3,17 @@ package com.example.divide.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,14 +53,19 @@ fun MainScreen(
     val unsettled = trips.filter { !it.group.isSettled }
     val settled = trips.filter { it.group.isSettled }
 
-    // Dialog State for Payments
+    // Dialog State for Payments & Nearby Sync
     var activePayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
     var missingUpiUser by remember { mutableStateOf<User?>(null) }
     var pendingPayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
+    var showSyncDialog by remember { mutableStateOf(false) }
 
     // Observe Sync ViewModel State for Live Payment Info Requests
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
     val paymentInfoState = syncViewModel?.paymentInfoState?.collectAsState()?.value ?: PaymentInfoState.Idle
+
+    val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
+        onPermissionsGranted = { showSyncDialog = true }
+    )
 
     // Handle incoming live payment info response or timeout
     LaunchedEffect(paymentInfoState) {
@@ -124,6 +133,40 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("Divide") },
                 actions = {
+                    val tint = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current
+                    TextButton(onClick = {
+                        if (syncState == SyncState.IDLE) {
+                            permissionLauncher()
+                        } else {
+                            syncViewModel?.stopSync()
+                        }
+                    }) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    color = if (syncState == SyncState.CONNECTED) Color.Green else Color.Red,
+                                    shape = CircleShape
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = if (syncState == SyncState.IDLE) Icons.Default.Sync else Icons.Default.Close,
+                            contentDescription = "Sync",
+                            tint = tint,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = when (syncState) {
+                                SyncState.IDLE -> "Sync"
+                                SyncState.ADVERTISING -> "Hosting"
+                                SyncState.DISCOVERING -> "Searching"
+                                SyncState.CONNECTED -> "Connected"
+                            },
+                            color = tint
+                        )
+                    }
                     IconButton(onClick = onProfileClick) {
                         Icon(Icons.Default.Person, contentDescription = "Profile")
                     }
@@ -193,6 +236,28 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    // Nearby Host/Join Dialog
+    if (showSyncDialog) {
+        AlertDialog(
+            onDismissRequest = { showSyncDialog = false },
+            title = { Text("Sync / Join Nearby Trip") },
+            text = { Text("Choose Host to share your trip with nearby friends, or Join to discover and receive a trip from a nearby host.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
+                    syncViewModel?.startHosting(activeTripId)
+                    showSyncDialog = false
+                }) { Text("Host") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    syncViewModel?.startJoining("pending")
+                    showSyncDialog = false
+                }) { Text("Join") }
+            }
+        )
     }
 
     // Requesting Payment Info Progress Dialog

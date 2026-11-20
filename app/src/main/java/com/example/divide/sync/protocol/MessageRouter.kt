@@ -42,7 +42,11 @@ class MessageRouter(
                 }
 
                 // We are connected to sync one specific group.
-                if (hello.groupId != expectedGroupId) {
+                if (
+                    expectedGroupId.isNotEmpty() &&
+                    expectedGroupId != "pending" &&
+                    hello.groupId != expectedGroupId
+                ) {
                     return null
                 }
 

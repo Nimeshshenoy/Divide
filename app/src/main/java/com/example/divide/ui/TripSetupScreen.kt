@@ -52,6 +52,9 @@ fun TripSetupScreen(
         ) 
     }
     
+    var showAddParticipantDialog by remember { mutableStateOf(false) }
+    var newParticipantName by remember { mutableStateOf("") }
+
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -93,11 +96,8 @@ fun TripSetupScreen(
                     val user = currentParticipants.getOrNull(index + 1)
                     UserSlot(user = user) {
                         if (currentParticipants.size < 5) {
-                            currentParticipants = currentParticipants + User(
-                                id = UUID.randomUUID().toString(),
-                                name = "Friend ${currentParticipants.size}",
-                                groupId = tripId ?: "pending"
-                            )
+                            newParticipantName = ""
+                            showAddParticipantDialog = true
                         }
                     }
                 }
@@ -136,7 +136,7 @@ fun TripSetupScreen(
             // Save Action: Writes to normalized tables and logs SyncEvent
             Button(
                 onClick = {
-                    if (tripName.isNotBlank() && currentParticipants.size > 1) {
+                    if (tripName.isNotBlank() && currentParticipants.isNotEmpty()) {
                         val finalTripId = tripId ?: UUID.randomUUID().toString()
                         
                         // Prep the Group and Users with the final ID
@@ -152,7 +152,7 @@ fun TripSetupScreen(
                         onSaveAndAddExpense(finalTripId)
                     } else {
                         scope.launch {
-                            snackbarHostState.showSnackbar("please add atleast 1 user and save the name to divide the expenses")
+                            snackbarHostState.showSnackbar("Please enter a trip name to save.")
                         }
                     }
                 },
@@ -161,6 +161,47 @@ fun TripSetupScreen(
                 Text("Save and Add Expenses")
             }
         }
+    }
+
+    // Dialog for adding real participant name
+    if (showAddParticipantDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddParticipantDialog = false },
+            title = { Text("Add Participant") },
+            text = {
+                OutlinedTextField(
+                    value = newParticipantName,
+                    onValueChange = { newParticipantName = it },
+                    label = { Text("Friend's Name") },
+                    placeholder = { Text("e.g. Rahul") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val nameTrimmed = newParticipantName.trim()
+                        if (nameTrimmed.isNotBlank()) {
+                            currentParticipants = currentParticipants + User(
+                                id = UUID.randomUUID().toString(),
+                                name = nameTrimmed,
+                                groupId = tripId ?: "pending"
+                            )
+                        }
+                        showAddParticipantDialog = false
+                    },
+                    enabled = newParticipantName.trim().isNotBlank()
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddParticipantDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

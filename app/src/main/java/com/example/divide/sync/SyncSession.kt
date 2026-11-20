@@ -1,5 +1,6 @@
 package com.example.divide.sync
 
+import com.example.divide.data.LocalRepository
 import com.example.divide.sync.nearby.NearbyManager
 import com.example.divide.sync.protocol.MessageRouter
 import com.example.divide.sync.protocol.NetworkMessage
@@ -64,6 +65,10 @@ class SyncSession(
     ) {
         lastConnectedEndpointId = endpointId
 
+        // 1. Ensure local device identity is logged for this group
+        LocalRepository.joinTrip(groupId)
+
+        // 2. Send HELLO handshake
         val hello =
             syncProtocol.createHello(
                 groupId

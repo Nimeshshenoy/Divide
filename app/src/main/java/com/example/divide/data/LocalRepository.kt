@@ -160,4 +160,31 @@ object LocalRepository {
             }
         }
     }
+
+    /**
+     * Called when joining a trip or connecting to a peer host.
+     * Logs a JOIN_TRIP SyncEvent with the local player's real name & upiId.
+     */
+    fun joinTrip(groupId: String) {
+        val currentProfile = profile.value
+        val localUser = User(
+            id = currentProfile.userId,
+            name = currentProfile.name,
+            groupId = groupId,
+            isLocalPlayer = true,
+            upiId = currentProfile.upiId
+        )
+
+        scope.launch {
+            val syncEvent = SyncEvent(
+                groupId = groupId,
+                authorId = currentProfile.userId,
+                type = "JOIN_TRIP",
+                payload = gson.toJson(localUser)
+            )
+
+            val userWithEvent = localUser.copy(lastEventId = syncEvent.eventId)
+            dao?.updateUserWithSync(userWithEvent, syncEvent)
+        }
+    }
 }
