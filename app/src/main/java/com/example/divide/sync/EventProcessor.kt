@@ -84,6 +84,9 @@ class EventProcessor(
             "ADD_TRIP" ->
                 handleAddTrip(event)
 
+            "UPDATE_GROUP" ->
+                handleUpdateGroup(event)
+
             "ADD_EXPENSE" ->
                 handleAddExpense(event)
 
@@ -521,6 +524,28 @@ class EventProcessor(
             event
         )
 
+        return true
+    }
+
+    private suspend fun handleUpdateGroup(event: SyncEvent): Boolean {
+        val payloadType = object : TypeToken<Map<String, Any>>() {}.type
+        val payload: Map<String, Any> = gson.fromJson(event.payload, payloadType)
+        val incomingGroup = gson.fromJson(gson.toJson(payload["group"]), Group::class.java)
+            .copy(lastEventId = event.eventId)
+        val existingGroup = dao.getGroupById(incomingGroup.id)
+        if (!isIncomingWinner(event, existingGroup?.lastEventId)) {
+            recordLosingEvent(event)
+            return false
+        }
+        val usersType = object : TypeToken<List<User>>() {}.type
+        val usersJson = payload["users"]?.let(gson::toJson)
+        val users = usersJson?.let { gson.fromJson<List<User>>(it, usersType) }.orEmpty()
+
+        dao.updateGroupWithSync(
+            incomingGroup,
+            users.map { it.copy(lastEventId = event.eventId) },
+            event
+        )
         return true
     }
 

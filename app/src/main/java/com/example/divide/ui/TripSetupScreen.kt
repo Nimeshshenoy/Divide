@@ -1,12 +1,13 @@
 package com.example.divide.ui
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +26,7 @@ import java.util.UUID
 @Composable
 fun TripSetupScreen(
     tripId: String? = null,
+    syncViewModel: SyncViewModel? = null,
     onSaveAndAddExpense: (String) -> Unit,
     onBack: () -> Unit
 ) {
@@ -32,28 +34,35 @@ fun TripSetupScreen(
     val trips by LocalRepository.trips.collectAsState()
     val profile by LocalRepository.profile.collectAsState()
     
-    // Find the specific trip details if editing
+    // Keep one real trip ID for discovery and the eventual save.
+    val draftTripId = remember(tripId) { tripId ?: UUID.randomUUID().toString() }
+
     val existingTripDetails = remember(tripId, trips) { tripId?.let { id -> trips.find { it.group.id == id } } }
 
     var tripName by remember(existingTripDetails) { mutableStateOf(existingTripDetails?.group?.name ?: "") }
     
     // Local state for the temporary users list
-    var currentParticipants by remember(existingTripDetails, profile) { 
+    var currentParticipants by remember(existingTripDetails, profile) {
         mutableStateOf(
             existingTripDetails?.users ?: listOf(
                 User(
-                    id = profile.userId, // Persistent distributed identity
+                    id = profile.userId,
                     name = profile.name,
-                    groupId = tripId ?: "pending", // Will be updated on save if new
+                    groupId = draftTripId,
                     isLocalPlayer = true,
                     upiId = profile.upiId
                 )
             )
-        ) 
+        )
     }
     
     var showAddParticipantDialog by remember { mutableStateOf(false) }
+    var showManualEntry by remember { mutableStateOf(false) }
     var newParticipantName by remember { mutableStateOf("") }
+    var nearbySearchRequested by remember { mutableStateOf(false) }
+    val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
+    val discoveredUsers = syncViewModel?.discoveredUsers?.collectAsState()?.value ?: emptyList()
+    val syncError = syncViewModel?.syncError?.collectAsState()?.value
 
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -86,20 +95,52 @@ fun TripSetupScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Participant selection: 4 slots with + buttons to add people
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                repeat(4) { index ->
-                    // Index 0 is the creator, slots are for index 1, 2, 3, 4
-                    val user = currentParticipants.getOrNull(index + 1)
-                    UserSlot(user = user) {
-                        if (currentParticipants.size < 5) {
-                            newParticipantName = ""
-                            showAddParticipantDialog = true
-                        }
+                Column {
+                    Text("Participants", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        "${currentParticipants.size} people",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        newParticipantName = ""
+                        showManualEntry = false
+                        showAddParticipantDialog = true
                     }
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Add people")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LazyColumn(modifier = Modifier.heightIn(max = 180.dp)) {
+                items(currentParticipants, key = { it.id }) { participant ->
+                    ListItem(
+                        headlineContent = { Text(participant.name) },
+                        supportingContent = {
+                            Text(if (participant.isLocalPlayer) "You" else "Trip participant")
+                        },
+                        trailingContent = {
+                            if (!participant.isLocalPlayer) {
+                                IconButton(onClick = {
+                                    currentParticipants = currentParticipants.filterNot { it.id == participant.id }
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove participant")
+                                }
+                            }
+                        }
+                    )
+                    HorizontalDivider()
                 }
             }
 
@@ -137,19 +178,17 @@ fun TripSetupScreen(
             Button(
                 onClick = {
                     if (tripName.isNotBlank() && currentParticipants.isNotEmpty()) {
-                        val finalTripId = tripId ?: UUID.randomUUID().toString()
-                        
-                        // Prep the Group and Users with the final ID
-                        val group = Group(id = finalTripId, name = tripName)
-                        val usersToSave = currentParticipants.map { it.copy(groupId = finalTripId) }
-                        
+                        val group = (existingTripDetails?.group ?: Group(id = draftTripId, name = tripName))
+                            .copy(name = tripName)
+                        val usersToSave = currentParticipants.map { it.copy(groupId = draftTripId) }
+
                         if (tripId == null) {
                             LocalRepository.addTrip(group, usersToSave)
                         } else {
-                            // Logic for updating group name/users can be added here
+                            LocalRepository.updateTrip(group, usersToSave)
                         }
-                        
-                        onSaveAndAddExpense(finalTripId)
+
+                        onSaveAndAddExpense(draftTripId)
                     } else {
                         scope.launch {
                             snackbarHostState.showSnackbar("Please enter a trip name to save.")
@@ -163,20 +202,90 @@ fun TripSetupScreen(
         }
     }
 
-    // Dialog for adding real participant name
+    // Nearby discovery and manual entry for adding a participant
     if (showAddParticipantDialog) {
+        val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
+            onPermissionsGranted = { syncViewModel?.startSearchingForFriends(draftTripId) }
+        )
+
+        LaunchedEffect(nearbySearchRequested) {
+            if (nearbySearchRequested) permissionLauncher()
+        }
+
         AlertDialog(
-            onDismissRequest = { showAddParticipantDialog = false },
+            onDismissRequest = {
+                syncViewModel?.stopSync()
+                showAddParticipantDialog = false 
+            },
             title = { Text("Add Participant") },
             text = {
-                OutlinedTextField(
-                    value = newParticipantName,
-                    onValueChange = { newParticipantName = it },
-                    label = { Text("Friend's Name") },
-                    placeholder = { Text("e.g. Rahul") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column {
+                    Text(
+                        "Find and connect to your friend's device to add them to this trip.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    syncError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+                    if (showManualEntry) {
+                        OutlinedTextField(
+                            value = newParticipantName,
+                            onValueChange = { newParticipantName = it },
+                            label = { Text("Participant name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (syncState == SyncState.DISCOVERING || syncState == SyncState.CONNECTING) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                if (syncState == SyncState.CONNECTING) "Connecting to device..." else "Searching nearby...",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        discoveredUsers.forEach { peer ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(peer.endpointName)
+                                TextButton(onClick = { syncViewModel?.inviteFriend(peer.endpointId) }) {
+                                    Text("Connect")
+                                }
+                            }
+                        }
+                    } else if (syncState == SyncState.IDLE || syncState == SyncState.ERROR) {
+                        OutlinedButton(
+                            onClick = { nearbySearchRequested = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (syncState == SyncState.ERROR) "Retry nearby search" else "Find nearby devices")
+                        }
+                    }
+
+                    if (!showManualEntry && syncState !in listOf(SyncState.DISCOVERING, SyncState.CONNECTING, SyncState.CONNECTED)) {
+                        TextButton(onClick = { showManualEntry = true }) {
+                            Text("Add manually instead")
+                        }
+                    }
+
+                    if (showManualEntry) {
+                        TextButton(onClick = { showManualEntry = false }) {
+                            Text("Use nearby device")
+                        }
+                    }
+                }
             },
             confirmButton = {
                 Button(
@@ -186,18 +295,23 @@ fun TripSetupScreen(
                             currentParticipants = currentParticipants + User(
                                 id = UUID.randomUUID().toString(),
                                 name = nameTrimmed,
-                                groupId = tripId ?: "pending"
+                                groupId = draftTripId
                             )
                         }
+                        syncViewModel?.stopSync()
                         showAddParticipantDialog = false
+                        nearbySearchRequested = false
                     },
-                    enabled = newParticipantName.trim().isNotBlank()
+                    enabled = showManualEntry && newParticipantName.trim().isNotBlank()
                 ) {
-                    Text("Add")
+                    Text("Add participant")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddParticipantDialog = false }) {
+                TextButton(onClick = {
+                    syncViewModel?.stopSync()
+                    showAddParticipantDialog = false 
+                }) {
                     Text("Cancel")
                 }
             }

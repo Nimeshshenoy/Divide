@@ -78,6 +78,7 @@ fun DivideApp(syncViewModel: SyncViewModel) {
             val tripId = backStackEntry.arguments?.getString("tripId")
             TripSetupScreen(
                 tripId = tripId,
+                syncViewModel = syncViewModel,
                 onSaveAndAddExpense = { id -> 
                     navController.navigate("add_expense/$id") {
                         popUpTo("main") { saveState = true }

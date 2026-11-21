@@ -32,6 +32,13 @@ data class HelloPayload(
     val groupId: String
 )
 
+data class ParticipantPayload(
+    val userId: String,
+    val name: String,
+    val upiId: String?,
+    val groupId: String
+)
+
 /**
  * A list describing which historical events this phone already knows.
  */
@@ -81,6 +88,7 @@ data class PaymentInfoResponsePayload(
 
 object MessageType {
     const val HELLO = "HELLO"
+    const val PARTICIPANT = "PARTICIPANT"
     const val EVENT_IDS = "EVENT_IDS"
     const val REQUEST_EVENTS = "REQUEST_EVENTS"
     const val EVENT_BATCH = "EVENT_BATCH"

@@ -14,7 +14,7 @@ import androidx.room.TypeConverters
         SyncEvent::class,
         Profile::class
     ],
-    version = 9, // Bumped for upiId fields
+    version = 10, // Bumped for composite primary key (id, groupId) on User
     exportSchema = false
 )
 @TypeConverters(Converters::class)

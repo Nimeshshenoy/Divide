@@ -27,10 +27,10 @@ data class Group(
  */
 @Entity(
     tableName = "users",
+    primaryKeys = ["id", "groupId"],
     indices = [Index(value = ["groupId"])]
 )
 data class User(
-    @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
     val name: String,
     val groupId: String, // Links this participant record to a specific group

@@ -14,7 +14,8 @@ import com.google.gson.Gson
 class MessageRouter(
     private val syncProtocol: SyncProtocol,
     private val expectedGroupId: String,
-    private val onPaymentInfoResponseReceived: ((PaymentInfoResponsePayload) -> Unit)? = null
+    private val onPaymentInfoResponseReceived: ((PaymentInfoResponsePayload) -> Unit)? = null,
+    private val onParticipantReceived: ((ParticipantPayload) -> Unit)? = null
 ) {
 
     private val gson = Gson()
@@ -24,6 +25,14 @@ class MessageRouter(
     ): NetworkMessage? {
 
         return when (message.type) {
+
+            MessageType.PARTICIPANT -> {
+                val participant = gson.fromJson(message.payload, ParticipantPayload::class.java)
+                if (participant.groupId == expectedGroupId) {
+                    onParticipantReceived?.invoke(participant)
+                }
+                null
+            }
 
             MessageType.HELLO -> {
 

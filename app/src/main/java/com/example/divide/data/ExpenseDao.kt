@@ -16,7 +16,7 @@ interface ExpenseDao {
     fun getAllTripsWithDetails(): Flow<List<TripWithDetails>>
 
     @Transaction
-    @Query("SELECT * FROM groups WHERE id = :groupId")
+    @Query("SELECT * FROM `groups` WHERE id = :groupId")
     suspend fun getTripWithDetailsById(groupId: String): TripWithDetails?
 
     @Query("SELECT * FROM profile WHERE id = 0")
@@ -57,7 +57,7 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE id = :expenseId")
     suspend fun getExpenseById(expenseId: String): Expense?
 
-    @Query("SELECT * FROM groups WHERE id = :groupId")
+    @Query("SELECT * FROM `groups` WHERE id = :groupId")
     suspend fun getGroupById(groupId: String): Group?
 
     @Query("SELECT * FROM users WHERE id = :userId")
@@ -89,6 +89,13 @@ interface ExpenseDao {
     suspend fun reconcileLegacyLocalUserIds(profileUserId: String)
 
     // --- ATOMIC TRANSACTIONAL OPERATIONS (Task 1) ---
+
+    @Transaction
+    suspend fun updateGroupWithSync(group: Group, users: List<User>, syncEvent: SyncEvent) {
+        updateGroup(group)
+        users.forEach { insertUser(it) }
+        insertSyncEvent(syncEvent)
+    }
 
     /**
      * Atomically creates a trip and its initial sync event.

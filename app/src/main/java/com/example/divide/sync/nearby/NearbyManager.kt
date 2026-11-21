@@ -16,7 +16,9 @@ class NearbyManager(
     private val onMessageReceived:
         suspend (endpointId: String, message: NetworkMessage) -> Unit,
     private val onConnected: ((endpointId: String) -> Unit)? = null,
-    private val onDisconnected: ((endpointId: String) -> Unit)? = null
+    private val onDisconnected: ((endpointId: String) -> Unit)? = null,
+    private val onEndpointDiscovered: ((endpointId: String, endpointName: String) -> Unit)? = null,
+    private val onConnectionFailed: ((message: String) -> Unit)? = null
 ) {
 
     companion object {
@@ -150,31 +152,7 @@ class NearbyManager(
                     "Found device: ${info.endpointName}"
                 )
 
-                /*
-                 * SIMPLE MVP:
-                 *
-                 * Automatically request connection when discovered.
-                 *
-                 * Later you will probably show the user:
-                 *
-                 * "Found Nimesh's phone"
-                 * [Connect]
-                 */
-
-                connectionsClient
-                    .requestConnection(
-                        localEndpointName,
-                        endpointId,
-                        connectionLifecycleCallback
-                    )
-                    .addOnFailureListener { error ->
-
-                        Log.e(
-                            TAG,
-                            "Connection request failed",
-                            error
-                        )
-                    }
+                onEndpointDiscovered?.invoke(endpointId, info.endpointName)
             }
 
             override fun onEndpointLost(
@@ -187,6 +165,19 @@ class NearbyManager(
                 )
             }
         }
+
+    fun requestConnection(endpointId: String) {
+        connectionsClient
+            .requestConnection(
+                localEndpointName,
+                endpointId,
+                connectionLifecycleCallback
+            )
+            .addOnFailureListener { error ->
+                Log.e(TAG, "Connection request failed", error)
+                onConnectionFailed?.invoke(error.localizedMessage ?: "Connection request failed")
+            }
+    }
 
     // =========================================================
     // CONNECTION LIFECYCLE
@@ -245,12 +236,9 @@ class NearbyManager(
                     }
 
                     else -> {
-
-                        Log.e(
-                            TAG,
-                            "Connection failed: " +
-                                result.status.statusCode
-                        )
+                        val message = "Connection failed"
+                        Log.e(TAG, "$message: ${result.status.statusCode}")
+                        onConnectionFailed?.invoke(message)
                     }
                 }
             }

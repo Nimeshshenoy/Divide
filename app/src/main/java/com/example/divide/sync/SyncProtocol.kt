@@ -26,6 +26,20 @@ class SyncProtocol(
         const val PROTOCOL_VERSION = 1
     }
 
+    fun createParticipantMessage(groupId: String): NetworkMessage {
+        return NetworkMessage(
+            type = MessageType.PARTICIPANT,
+            payload = gson.toJson(
+                ParticipantPayload(
+                    userId = localUserId,
+                    name = getLocalProfile?.invoke()?.name.orEmpty(),
+                    upiId = getLocalProfile?.invoke()?.upiId,
+                    groupId = groupId
+                )
+            )
+        )
+    }
+
     /**
      * Called immediately after a network connection succeeds.
      */

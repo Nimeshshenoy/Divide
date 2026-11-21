@@ -22,6 +22,7 @@ class SyncSession(
     private var pendingTargetPayeeUserId: String? = null
 
     var onPaymentInfoResponse: ((PaymentInfoResponsePayload) -> Unit)? = null
+    var onParticipantReceived: ((com.example.divide.data.User) -> Unit)? = null
 
     private val router =
         MessageRouter(
@@ -29,6 +30,15 @@ class SyncSession(
             expectedGroupId = groupId,
             onPaymentInfoResponseReceived = { response ->
                 validateAndProcessPaymentResponse(response)
+            },
+            onParticipantReceived = { participant ->
+                onParticipantReceived?.invoke(
+                    com.example.divide.data.User(
+                        id = participant.userId,
+                        name = participant.name,
+                        groupId = participant.groupId
+                    )
+                )
             }
         )
 
@@ -74,10 +84,8 @@ class SyncSession(
                 groupId
             )
 
-        nearbyManager.send(
-            endpointId,
-            hello
-        )
+        nearbyManager.send(endpointId, hello)
+        nearbyManager.send(endpointId, syncProtocol.createParticipantMessage(groupId))
     }
 
     fun onDisconnected(

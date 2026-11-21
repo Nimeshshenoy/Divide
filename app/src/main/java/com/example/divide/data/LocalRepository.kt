@@ -72,6 +72,20 @@ object LocalRepository {
         }
     }
 
+    fun updateTrip(group: Group, users: List<User>) {
+        scope.launch {
+            val syncEvent = SyncEvent(
+                groupId = group.id,
+                authorId = profile.value.userId,
+                type = "UPDATE_GROUP",
+                payload = gson.toJson(mapOf("group" to group, "users" to users))
+            )
+            val groupWithEvent = group.copy(lastEventId = syncEvent.eventId)
+            val usersWithEvent = users.map { it.copy(lastEventId = syncEvent.eventId) }
+            dao?.updateGroupWithSync(groupWithEvent, usersWithEvent, syncEvent)
+        }
+    }
+
     fun addExpense(expense: Expense) {
         scope.launch {
             val syncEvent = SyncEvent(

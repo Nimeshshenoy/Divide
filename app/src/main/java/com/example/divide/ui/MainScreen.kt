@@ -162,6 +162,8 @@ fun MainScreen(
                                 SyncState.IDLE -> "Sync"
                                 SyncState.ADVERTISING -> "Hosting"
                                 SyncState.DISCOVERING -> "Searching"
+                            SyncState.CONNECTING -> "Connecting"
+                            SyncState.ERROR -> "Sync error"
                                 SyncState.CONNECTED -> "Connected"
                             },
                             color = tint

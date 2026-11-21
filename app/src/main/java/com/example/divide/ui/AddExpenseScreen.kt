@@ -46,7 +46,25 @@ fun AddExpenseScreen(
     val profile by LocalRepository.profile.collectAsState()
     
     // Find the specific trip we are currently viewing
-    val tripDetails = trips.find { it.group.id == tripId } ?: return
+    val tripDetails = trips.find { it.group.id == tripId }
+    if (tripDetails == null) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Trip not found") },
+                    navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }
+                )
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("This trip is unavailable. Go back and open it again.")
+            }
+        }
+        return
+    }
     val group = tripDetails.group
     
     // UI State for form fields
@@ -58,8 +76,9 @@ fun AddExpenseScreen(
         tripDetails.users.map { if (it.isLocalPlayer) it.copy(name = profile.name, upiId = profile.upiId) else it }
     }
 
-    var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.firstOrNull() ?: displayUsers.first()) }
+    var paidBy by remember(displayUsers) { mutableStateOf(displayUsers.firstOrNull()) }
     var sharedBy by remember(displayUsers) { mutableStateOf(displayUsers) }
+    val selectedPayer = paidBy
     
     var editingExpenseId by remember { mutableStateOf<String?>(null) }
     var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
@@ -134,6 +153,8 @@ fun AddExpenseScreen(
                                 SyncState.IDLE -> "Sync"
                                 SyncState.ADVERTISING -> "Hosting"
                                 SyncState.DISCOVERING -> "Searching"
+                                SyncState.CONNECTING -> "Connecting"
+                                SyncState.ERROR -> "Sync error"
                                 SyncState.CONNECTED -> "Connected"
                             },
                             color = tint
@@ -182,11 +203,17 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            if (displayUsers.isEmpty()) {
+                Text(
+                    "Add a participant before recording an expense.",
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else {
             // Dropdowns for Payer and Participants
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Box {
                     OutlinedButton(onClick = { paidByExpanded = true }) {
-                        Text("Paid by: ${paidBy.name}")
+                        Text("Paid by: ${selectedPayer?.name ?: "Select payer"}")
                     }
                     DropdownMenu(expanded = paidByExpanded, onDismissRequest = { paidByExpanded = false }) {
                         displayUsers.forEach { user ->
@@ -226,17 +253,19 @@ fun AddExpenseScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            }
+
             // Action: Save Expense (Adds data to DB and logs SyncEvent)
             Button(
                 onClick = {
                     val amountDouble = amount.toDoubleOrNull() ?: 0.0
-                    if (expenseName.isNotBlank() && amountDouble > 0 && sharedBy.isNotEmpty()) {
+                    if (selectedPayer != null && expenseName.isNotBlank() && amountDouble > 0 && sharedBy.isNotEmpty()) {
                         if (editingExpenseId != null) {
                             val originalExpense = tripDetails.expenses.find { it.id == editingExpenseId }
                             originalExpense?.let {
                                 val updatedExpense = it.copy(
                                     amount = amountDouble,
-                                    payerId = paidBy.id,
+                                    payerId = selectedPayer.id,
                                     participantIds = sharedBy.map { u -> u.id }
                                 )
                                 LocalRepository.updateExpense(updatedExpense)
@@ -246,7 +275,7 @@ fun AddExpenseScreen(
                                 groupId = tripId,
                                 name = expenseName,
                                 amount = amountDouble,
-                                payerId = paidBy.id,
+                                payerId = selectedPayer.id,
                                 participantIds = sharedBy.map { it.id }
                             )
                             LocalRepository.addExpense(newExpense)
@@ -258,6 +287,7 @@ fun AddExpenseScreen(
                         focusManager.clearFocus()
                     }
                 },
+                enabled = displayUsers.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (editingExpenseId == null) "Save Expense" else "Update Expense")
@@ -343,7 +373,7 @@ fun AddExpenseScreen(
                                 editingExpenseId = expense.id
                                 expenseName = expense.name
                                 amount = expense.amount.toString()
-                                paidBy = displayUsers.find { it.id == expense.payerId } ?: displayUsers.first()
+                                paidBy = displayUsers.find { it.id == expense.payerId } ?: displayUsers.firstOrNull()
                                 sharedBy = displayUsers.filter { expense.participantIds.contains(it.id) }
                             }) {
                                 Icon(Icons.Default.Edit, contentDescription = "Edit Expense")
