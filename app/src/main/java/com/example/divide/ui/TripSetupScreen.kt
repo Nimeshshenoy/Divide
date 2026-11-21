@@ -1,12 +1,13 @@
 package com.example.divide.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,7 +41,7 @@ fun TripSetupScreen(
     val existingTripDetails = remember(tripId, trips) { tripId?.let { id -> trips.find { it.group.id == id } } }
 
     var tripName by remember(existingTripDetails) { mutableStateOf(existingTripDetails?.group?.name ?: "") }
-    
+
     // Local state for the temporary users list
     var currentParticipants by remember(existingTripDetails, profile) {
         mutableStateOf(
@@ -55,14 +56,24 @@ fun TripSetupScreen(
             )
         )
     }
-    
+
     var showAddParticipantDialog by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
     var newParticipantName by remember { mutableStateOf("") }
-    var nearbySearchRequested by remember { mutableStateOf(false) }
+
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
     val discoveredUsers = syncViewModel?.discoveredUsers?.collectAsState()?.value ?: emptyList()
     val syncError = syncViewModel?.syncError?.collectAsState()?.value
+    val connectedParticipant = syncViewModel?.connectedParticipant?.collectAsState()?.value
+
+    // Automatically add newly connected participant
+    LaunchedEffect(connectedParticipant) {
+        connectedParticipant?.let { user ->
+            if (currentParticipants.none { it.id == user.id }) {
+                currentParticipants = currentParticipants + user
+            }
+        }
+    }
 
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -205,12 +216,10 @@ fun TripSetupScreen(
     // Nearby discovery and manual entry for adding a participant
     if (showAddParticipantDialog) {
         val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
-            onPermissionsGranted = { syncViewModel?.startSearchingForFriends(draftTripId) }
+            onPermissionsGranted = {
+                syncViewModel?.startSearchingForFriends(draftTripId)
+            }
         )
-
-        LaunchedEffect(nearbySearchRequested) {
-            if (nearbySearchRequested) permissionLauncher()
-        }
 
         AlertDialog(
             onDismissRequest = {
@@ -225,86 +234,147 @@ fun TripSetupScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
 
-                    syncError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    syncError?.let { err ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = err,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
 
                     if (showManualEntry) {
                         OutlinedTextField(
                             value = newParticipantName,
                             onValueChange = { newParticipantName = it },
                             label = { Text("Participant name") },
+                            placeholder = { Text("e.g. Rahul") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+                    } else {
+                        when (syncState) {
+                            SyncState.DISCOVERING, SyncState.ADVERTISING -> {
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            if (discoveredUsers.isEmpty()) "Searching nearby devices (0 found)..." else "Found ${discoveredUsers.size} device(s):",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    if (discoveredUsers.isEmpty()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            "Make sure your friend's phone has Bluetooth and Location turned on, and is also on the Sync or Trip screen.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        discoveredUsers.forEach { peer ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(peer.endpointName, fontWeight = FontWeight.SemiBold)
+                                                Button(onClick = { syncViewModel?.inviteFriend(peer.endpointId) }) {
+                                                    Text("Connect")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            SyncState.CONNECTING -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text("Connecting to device...", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                            SyncState.CONNECTED -> {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = "Connected",
+                                        tint = Color.Green,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        "Connected! ${connectedParticipant?.name ?: "Friend"} added to trip.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            SyncState.IDLE, SyncState.ERROR -> {
+                                OutlinedButton(
+                                    onClick = { permissionLauncher() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(if (syncState == SyncState.ERROR) "Retry Nearby Search" else "Find Nearby Devices")
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    if (syncState == SyncState.DISCOVERING || syncState == SyncState.CONNECTING) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                if (syncState == SyncState.CONNECTING) "Connecting to device..." else "Searching nearby...",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        discoveredUsers.forEach { peer ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(peer.endpointName)
-                                TextButton(onClick = { syncViewModel?.inviteFriend(peer.endpointId) }) {
-                                    Text("Connect")
-                                }
-                            }
-                        }
-                    } else if (syncState == SyncState.IDLE || syncState == SyncState.ERROR) {
-                        OutlinedButton(
-                            onClick = { nearbySearchRequested = true },
-                            modifier = Modifier.fillMaxWidth()
+                    if (!showManualEntry && syncState != SyncState.CONNECTED) {
+                        TextButton(
+                            onClick = { showManualEntry = true },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) {
-                            Text(if (syncState == SyncState.ERROR) "Retry nearby search" else "Find nearby devices")
-                        }
-                    }
-
-                    if (!showManualEntry && syncState !in listOf(SyncState.DISCOVERING, SyncState.CONNECTING, SyncState.CONNECTED)) {
-                        TextButton(onClick = { showManualEntry = true }) {
-                            Text("Add manually instead")
+                            Text("Type name manually instead")
                         }
                     }
 
                     if (showManualEntry) {
-                        TextButton(onClick = { showManualEntry = false }) {
-                            Text("Use nearby device")
+                        TextButton(
+                            onClick = { showManualEntry = false },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text("Back to Nearby Search")
                         }
                     }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val nameTrimmed = newParticipantName.trim()
-                        if (nameTrimmed.isNotBlank()) {
-                            currentParticipants = currentParticipants + User(
-                                id = UUID.randomUUID().toString(),
-                                name = nameTrimmed,
-                                groupId = draftTripId
-                            )
-                        }
-                        syncViewModel?.stopSync()
-                        showAddParticipantDialog = false
-                        nearbySearchRequested = false
-                    },
-                    enabled = showManualEntry && newParticipantName.trim().isNotBlank()
-                ) {
-                    Text("Add participant")
+                if (showManualEntry) {
+                    Button(
+                        onClick = {
+                            val nameTrimmed = newParticipantName.trim()
+                            if (nameTrimmed.isNotBlank()) {
+                                currentParticipants = currentParticipants + User(
+                                    id = UUID.randomUUID().toString(),
+                                    name = nameTrimmed,
+                                    groupId = draftTripId
+                                )
+                            }
+                            syncViewModel?.stopSync()
+                            showAddParticipantDialog = false
+                        },
+                        enabled = newParticipantName.trim().isNotBlank()
+                    ) {
+                        Text("Add Participant")
+                    }
                 }
             },
             dismissButton = {
@@ -312,7 +382,7 @@ fun TripSetupScreen(
                     syncViewModel?.stopSync()
                     showAddParticipantDialog = false 
                 }) {
-                    Text("Cancel")
+                    Text("Close")
                 }
             }
         )

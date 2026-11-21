@@ -17,6 +17,7 @@ object NearbyPermissions {
 
     /**
      * Returns the array of permissions required for Nearby Connections.
+     * Note: Android 12+ requires both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION together in runtime requests.
      */
     fun getRequiredPermissions(): Array<String> {
         return arrayOf(
@@ -24,7 +25,8 @@ object NearbyPermissions {
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.BLUETOOTH_ADVERTISE,
-            Manifest.permission.ACCESS_FINE_LOCATION
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
     }
 

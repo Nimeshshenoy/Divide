@@ -57,6 +57,7 @@ class NearbyManager(
     fun startAdvertising() {
         if (!NearbyPermissions.hasRequiredPermissions(context)) {
             Log.e(TAG, "Cannot start advertising: missing required runtime permissions")
+            onConnectionFailed?.invoke("Missing required runtime permissions for Nearby Connections.")
             return
         }
 
@@ -86,6 +87,8 @@ class NearbyManager(
                     "Advertising failed",
                     error
                 )
+                val msg = "Advertising failed (${error.javaClass.simpleName}): ${error.message ?: error.toString()}"
+                onConnectionFailed?.invoke(msg)
             }
     }
 
@@ -100,6 +103,7 @@ class NearbyManager(
     fun startDiscovery() {
         if (!NearbyPermissions.hasRequiredPermissions(context)) {
             Log.e(TAG, "Cannot start discovery: missing required runtime permissions")
+            onConnectionFailed?.invoke("Missing required runtime permissions for Nearby Connections.")
             return
         }
 
@@ -128,6 +132,8 @@ class NearbyManager(
                     "Discovery failed",
                     error
                 )
+                val msg = "Discovery failed (${error.javaClass.simpleName}): ${error.message ?: error.toString()}"
+                onConnectionFailed?.invoke(msg)
             }
     }
 
