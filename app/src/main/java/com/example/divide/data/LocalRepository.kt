@@ -201,4 +201,20 @@ object LocalRepository {
             dao?.updateUserWithSync(userWithEvent, syncEvent)
         }
     }
+
+    /**
+     * Persists a connected peer participant into Room for a trip.
+     */
+    fun addUserToTrip(user: User) {
+        scope.launch {
+            val syncEvent = SyncEvent(
+                groupId = user.groupId,
+                authorId = user.id,
+                type = "ADD_USER",
+                payload = gson.toJson(user)
+            )
+            val userWithEvent = user.copy(isLocalPlayer = false, lastEventId = syncEvent.eventId)
+            dao?.updateUserWithSync(userWithEvent, syncEvent)
+        }
+    }
 }

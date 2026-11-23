@@ -36,7 +36,9 @@ class SyncSession(
                     com.example.divide.data.User(
                         id = participant.userId,
                         name = participant.name,
-                        groupId = participant.groupId
+                        groupId = participant.groupId,
+                        isLocalPlayer = false,
+                        upiId = participant.upiId
                     )
                 )
             }
@@ -78,14 +80,21 @@ class SyncSession(
         // 1. Ensure local device identity is logged for this group
         LocalRepository.joinTrip(groupId)
 
-        // 2. Send HELLO handshake
+        // 2. Send HELLO handshake and Participant Payload
         val hello =
             syncProtocol.createHello(
                 groupId
             )
 
-        nearbyManager.send(endpointId, hello)
-        nearbyManager.send(endpointId, syncProtocol.createParticipantMessage(groupId))
+        nearbyManager.send(
+            endpointId,
+            hello
+        )
+
+        nearbyManager.send(
+            endpointId,
+            syncProtocol.createParticipantMessage(groupId)
+        )
     }
 
     fun onDisconnected(

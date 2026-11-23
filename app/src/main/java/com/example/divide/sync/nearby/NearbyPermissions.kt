@@ -3,6 +3,7 @@ package com.example.divide.sync.nearby
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -16,18 +17,29 @@ import androidx.core.content.ContextCompat
 object NearbyPermissions {
 
     /**
-     * Returns the array of permissions required for Nearby Connections.
-     * Note: Android 12+ requires both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION together in runtime requests.
+     * Returns the array of permissions required for Nearby Connections based on OS version.
      */
     fun getRequiredPermissions(): Array<String> {
-        return arrayOf(
-            Manifest.permission.NEARBY_WIFI_DEVICES,
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_ADVERTISE,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) { // API 31+
+            val list = mutableListOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // API 33+
+                list.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+            }
+            list.toTypedArray()
+        } else { // API 30 and below
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN
+            )
+        }
     }
 
     /**

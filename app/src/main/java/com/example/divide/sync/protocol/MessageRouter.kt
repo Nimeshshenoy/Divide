@@ -28,8 +28,13 @@ class MessageRouter(
 
             MessageType.PARTICIPANT -> {
                 val participant = gson.fromJson(message.payload, ParticipantPayload::class.java)
-                if (participant.groupId == expectedGroupId) {
-                    onParticipantReceived?.invoke(participant)
+                val targetGroupId = if (expectedGroupId.isNotEmpty() && expectedGroupId != "pending") {
+                    expectedGroupId
+                } else {
+                    participant.groupId
+                }
+                if (participant.groupId == expectedGroupId || participant.groupId == "pending" || expectedGroupId == "pending" || expectedGroupId.isEmpty()) {
+                    onParticipantReceived?.invoke(participant.copy(groupId = targetGroupId))
                 }
                 null
             }

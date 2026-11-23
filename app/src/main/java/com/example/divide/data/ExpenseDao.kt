@@ -85,8 +85,30 @@ interface ExpenseDao {
     @Query("SELECT * FROM users WHERE groupId = :groupId AND isLocalPlayer = 1 LIMIT 1")
     suspend fun getLocalUserForGroup(groupId: String): User?
 
-    @Query("UPDATE users SET id = :profileUserId WHERE isLocalPlayer = 1 AND id != :profileUserId")
-    suspend fun reconcileLegacyLocalUserIds(profileUserId: String)
+    @Delete
+    suspend fun deleteUser(user: User)
+
+    @Query("SELECT * FROM users WHERE isLocalPlayer = 1 AND id != :profileUserId")
+    suspend fun getLegacyLocalUsers(profileUserId: String): List<User>
+
+    @Query("SELECT * FROM users WHERE id = :userId AND groupId = :groupId LIMIT 1")
+    suspend fun getUserByIdAndGroup(userId: String, groupId: String): User?
+
+    @Query("UPDATE users SET id = :newUserId WHERE id = :oldUserId AND groupId = :groupId")
+    suspend fun updateUserIdForLocalPlayer(oldUserId: String, groupId: String, newUserId: String)
+
+    @Transaction
+    suspend fun reconcileLegacyLocalUserIds(profileUserId: String) {
+        val legacyUsers = getLegacyLocalUsers(profileUserId)
+        for (user in legacyUsers) {
+            val existingUser = getUserByIdAndGroup(profileUserId, user.groupId)
+            if (existingUser == null) {
+                updateUserIdForLocalPlayer(user.id, user.groupId, profileUserId)
+            } else {
+                deleteUser(user)
+            }
+        }
+    }
 
     // --- ATOMIC TRANSACTIONAL OPERATIONS (Task 1) ---
 

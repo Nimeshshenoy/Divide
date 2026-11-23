@@ -52,7 +52,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
     private var syncSession: SyncSession? = null
     private var paymentTimeoutJob: Job? = null
 
-    private fun setupSync(groupId: String, isHost: Boolean) {
+    private fun setupSync(groupId: String, isHost: Boolean, dualMode: Boolean = false) {
         val localUserId = LocalRepository.profile.value.userId
         val syncProtocol = SyncProtocol(
             dao = dao,
@@ -67,6 +67,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         }
         session.onParticipantReceived = { user ->
             _connectedParticipant.value = user
+            LocalRepository.addUserToTrip(user)
         }
 
         val manager = NearbyManager(
@@ -78,6 +79,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
             onConnected = { endpointId ->
                 _syncError.value = null
                 _syncState.value = SyncState.CONNECTED
+                _discoveredUsers.value = emptyList()
                 session.onConnected(endpointId)
             },
             onDisconnected = { endpointId ->
@@ -100,7 +102,11 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         syncSession = session
         nearbyManager = manager
 
-        if (isHost) {
+        if (dualMode) {
+            _syncState.value = SyncState.DISCOVERING
+            manager.startAdvertising()
+            manager.startDiscovery()
+        } else if (isHost) {
             _syncState.value = SyncState.ADVERTISING
             manager.startAdvertising()
         } else {
@@ -127,7 +133,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         _connectedParticipant.value = null
         _syncError.value = null
         stopSync()
-        setupSync(groupId, isHost = false)
+        setupSync(groupId, isHost = false, dualMode = true)
     }
 
     fun inviteFriend(endpointId: String) {

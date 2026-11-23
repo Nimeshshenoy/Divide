@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.divide"
-        minSdk = 34
+        minSdk = 29
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
