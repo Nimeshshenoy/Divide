@@ -13,12 +13,26 @@ import com.google.gson.Gson
  */
 class MessageRouter(
     private val syncProtocol: SyncProtocol,
-    private val expectedGroupId: String,
+    expectedGroupId: String,
     private val onPaymentInfoResponseReceived: ((PaymentInfoResponsePayload) -> Unit)? = null,
-    private val onParticipantReceived: ((ParticipantPayload) -> Unit)? = null
+    private val onParticipantReceived: ((ParticipantPayload) -> Unit)? = null,
+    private val onGroupIdAdopted: ((String) -> Unit)? = null
 ) {
 
     private val gson = Gson()
+    private var currentGroupId: String = expectedGroupId
+
+    private fun resolveGroupId(incomingGroupId: String): Boolean {
+        if (incomingGroupId.isEmpty() || incomingGroupId == "pending") {
+            return true
+        }
+        if (currentGroupId.isEmpty() || currentGroupId == "pending") {
+            currentGroupId = incomingGroupId
+            onGroupIdAdopted?.invoke(incomingGroupId)
+            return true
+        }
+        return currentGroupId == incomingGroupId
+    }
 
     suspend fun handle(
         message: NetworkMessage
@@ -28,12 +42,12 @@ class MessageRouter(
 
             MessageType.PARTICIPANT -> {
                 val participant = gson.fromJson(message.payload, ParticipantPayload::class.java)
-                val targetGroupId = if (expectedGroupId.isNotEmpty() && expectedGroupId != "pending") {
-                    expectedGroupId
-                } else {
-                    participant.groupId
-                }
-                if (participant.groupId == expectedGroupId || participant.groupId == "pending" || expectedGroupId == "pending" || expectedGroupId.isEmpty()) {
+                if (resolveGroupId(participant.groupId)) {
+                    val targetGroupId = if (currentGroupId.isNotEmpty() && currentGroupId != "pending") {
+                        currentGroupId
+                    } else {
+                        participant.groupId
+                    }
                     onParticipantReceived?.invoke(participant.copy(groupId = targetGroupId))
                 }
                 null
@@ -55,18 +69,14 @@ class MessageRouter(
                     return null
                 }
 
-                // We are connected to sync one specific group.
-                if (
-                    expectedGroupId.isNotEmpty() &&
-                    expectedGroupId != "pending" &&
-                    hello.groupId != expectedGroupId
-                ) {
+                // Accept dynamic group ID adoption if in "pending" mode
+                if (!resolveGroupId(hello.groupId)) {
                     return null
                 }
 
                 syncProtocol
                     .createEventIdsMessage(
-                        expectedGroupId
+                        currentGroupId
                     )
             }
 
@@ -78,10 +88,7 @@ class MessageRouter(
                         EventIdsPayload::class.java
                     )
 
-                if (
-                    payload.groupId !=
-                    expectedGroupId
-                ) {
+                if (!resolveGroupId(payload.groupId)) {
                     return null
                 }
 
@@ -99,10 +106,7 @@ class MessageRouter(
                         RequestEventsPayload::class.java
                     )
 
-                if (
-                    request.groupId !=
-                    expectedGroupId
-                ) {
+                if (!resolveGroupId(request.groupId)) {
                     return null
                 }
 
@@ -120,10 +124,7 @@ class MessageRouter(
                         EventBatchPayload::class.java
                     )
 
-                if (
-                    batch.groupId !=
-                    expectedGroupId
-                ) {
+                if (!resolveGroupId(batch.groupId)) {
                     return null
                 }
 
@@ -144,10 +145,7 @@ class MessageRouter(
                         RequestPaymentInfoPayload::class.java
                     )
 
-                if (
-                    request.groupId !=
-                    expectedGroupId
-                ) {
+                if (!resolveGroupId(request.groupId)) {
                     return null
                 }
 
@@ -165,10 +163,7 @@ class MessageRouter(
                         PaymentInfoResponsePayload::class.java
                     )
 
-                if (
-                    response.groupId !=
-                    expectedGroupId
-                ) {
+                if (!resolveGroupId(response.groupId)) {
                     return null
                 }
 

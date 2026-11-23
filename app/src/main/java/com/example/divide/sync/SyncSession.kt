@@ -5,6 +5,9 @@ import com.example.divide.sync.nearby.NearbyManager
 import com.example.divide.sync.protocol.MessageRouter
 import com.example.divide.sync.protocol.NetworkMessage
 import com.example.divide.sync.protocol.PaymentInfoResponsePayload
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Represents ONE active synchronization session for ONE group.
@@ -17,12 +20,16 @@ class SyncSession(
     private lateinit var nearbyManager: NearbyManager
     private var lastConnectedEndpointId: String? = null
 
+    var activeGroupId: String = groupId
+        private set
+
     // Pending payment request correlation state
     private var pendingPaymentRequestId: String? = null
     private var pendingTargetPayeeUserId: String? = null
 
     var onPaymentInfoResponse: ((PaymentInfoResponsePayload) -> Unit)? = null
     var onParticipantReceived: ((com.example.divide.data.User) -> Unit)? = null
+    var onGroupIdAdopted: ((String) -> Unit)? = null
 
     private val router =
         MessageRouter(
@@ -41,6 +48,10 @@ class SyncSession(
                         upiId = participant.upiId
                     )
                 )
+            },
+            onGroupIdAdopted = { adoptedId ->
+                activeGroupId = adoptedId
+                onGroupIdAdopted?.invoke(adoptedId)
             }
         )
 
@@ -78,12 +89,14 @@ class SyncSession(
         lastConnectedEndpointId = endpointId
 
         // 1. Ensure local device identity is logged for this group
-        LocalRepository.joinTrip(groupId)
+        if (activeGroupId.isNotEmpty() && activeGroupId != "pending") {
+            LocalRepository.joinTrip(activeGroupId)
+        }
 
         // 2. Send HELLO handshake and Participant Payload
         val hello =
             syncProtocol.createHello(
-                groupId
+                activeGroupId
             )
 
         nearbyManager.send(
@@ -93,8 +106,18 @@ class SyncSession(
 
         nearbyManager.send(
             endpointId,
-            syncProtocol.createParticipantMessage(groupId)
+            syncProtocol.createParticipantMessage(activeGroupId)
         )
+
+        // 3. If hosting/connected to a specific group, transmit ADD_TRIP event payload
+        if (activeGroupId.isNotEmpty() && activeGroupId != "pending") {
+            CoroutineScope(Dispatchers.IO).launch {
+                val addTripMsg = syncProtocol.createAddTripMessage(activeGroupId)
+                if (addTripMsg != null) {
+                    nearbyManager.send(endpointId, addTripMsg)
+                }
+            }
+        }
     }
 
     fun onDisconnected(

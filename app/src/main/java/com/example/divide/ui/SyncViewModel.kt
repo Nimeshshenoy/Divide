@@ -69,6 +69,10 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
             _connectedParticipant.value = user
             LocalRepository.addUserToTrip(user)
         }
+        session.onGroupIdAdopted = { adoptedGroupId ->
+            Log.d("SyncViewModel", "Adopted groupId: $adoptedGroupId")
+            LocalRepository.joinTrip(adoptedGroupId)
+        }
 
         val manager = NearbyManager(
             context = context,
@@ -127,6 +131,10 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         _syncError.value = null
         stopSync()
         setupSync(groupId, isHost = false)
+    }
+
+    fun joinNearbyTrip() {
+        startJoining("pending")
     }
 
     fun startSearchingForFriends(groupId: String) {

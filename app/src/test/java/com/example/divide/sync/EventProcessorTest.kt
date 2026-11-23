@@ -130,6 +130,15 @@ class EventProcessorTest {
         override suspend fun getExpenseById(expenseId: String): Expense? = expenses.find { it.id == expenseId }
         override suspend fun getGroupById(groupId: String): Group? = groups.find { it.id == groupId }
         override suspend fun getUserById(userId: String): User? = users.find { it.id == userId }
+        override suspend fun isUserMemberOfGroup(userId: String, groupId: String): Boolean = true
+        override suspend fun getSyncEventIdsForGroup(groupId: String): List<String> = events.values.filter { it.groupId == groupId }.map { it.eventId }
+        override suspend fun getAddTripSyncEventForGroup(groupId: String): SyncEvent? = events.values.firstOrNull { it.groupId == groupId && it.type == "ADD_TRIP" }
+        override suspend fun getSyncEventsByIds(groupId: String, eventIds: List<String>): List<SyncEvent> = events.values.filter { it.groupId == groupId && it.eventId in eventIds }
+        override suspend fun getLocalUserForGroup(groupId: String): User? = users.find { it.groupId == groupId && it.isLocalPlayer }
+        override suspend fun deleteUser(user: User) { users.removeIf { it.id == user.id } }
+        override suspend fun getLegacyLocalUsers(profileUserId: String): List<User> = emptyList()
+        override suspend fun getUserByIdAndGroup(userId: String, groupId: String): User? = users.find { it.id == userId && it.groupId == groupId }
+        override suspend fun updateUserIdForLocalPlayer(oldUserId: String, groupId: String, newUserId: String) {}
 
         override suspend fun insertTripWithSync(group: Group, users: List<User>, syncEvent: SyncEvent) {
             insertGroup(group)

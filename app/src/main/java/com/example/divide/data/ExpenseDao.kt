@@ -79,6 +79,9 @@ interface ExpenseDao {
     @Query("SELECT eventId FROM sync_events WHERE groupId = :groupId")
     suspend fun getSyncEventIdsForGroup(groupId: String): List<String>
 
+    @Query("SELECT * FROM sync_events WHERE groupId = :groupId AND type = 'ADD_TRIP' LIMIT 1")
+    suspend fun getAddTripSyncEventForGroup(groupId: String): SyncEvent?
+
     @Query("SELECT * FROM sync_events WHERE groupId = :groupId AND eventId IN (:eventIds)")
     suspend fun getSyncEventsByIds(groupId: String, eventIds: List<String>): List<SyncEvent>
 

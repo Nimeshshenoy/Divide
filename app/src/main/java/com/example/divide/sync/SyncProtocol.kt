@@ -2,6 +2,7 @@ package com.example.divide.sync
 
 import com.example.divide.data.ExpenseDao
 import com.example.divide.data.Profile
+import com.example.divide.data.SyncEvent
 import com.example.divide.sync.protocol.*
 import com.google.gson.Gson
 import java.util.UUID
@@ -223,6 +224,32 @@ class SyncProtocol(
         return NetworkMessage(
             type = MessageType.PAYMENT_INFO_RESPONSE,
             payload = gson.toJson(response)
+        )
+    }
+
+    /**
+     * Bundles the ADD_TRIP sync event for the group so connected peers receive trip details immediately.
+     */
+    suspend fun createAddTripMessage(
+        groupId: String
+    ): NetworkMessage? {
+        val tripDetails = dao.getTripWithDetailsById(groupId) ?: return null
+        val addTripEvent = dao.getAddTripSyncEventForGroup(groupId)
+            ?: SyncEvent(
+                groupId = groupId,
+                authorId = localUserId,
+                type = "ADD_TRIP",
+                payload = gson.toJson(mapOf("group" to tripDetails.group, "users" to tripDetails.users))
+            )
+
+        val batch = EventBatchPayload(
+            groupId = groupId,
+            events = listOf(addTripEvent)
+        )
+
+        return NetworkMessage(
+            type = MessageType.EVENT_BATCH,
+            payload = gson.toJson(batch)
         )
     }
 }

@@ -160,10 +160,10 @@ class EventProcessor(
 
     /**
      * Checks if the author of the event is a member of the group.
-     * ADD_TRIP is skipped because the group/membership doesn't exist yet.
+     * ADD_TRIP, JOIN_TRIP, and ADD_USER are skipped because membership is being established.
      */
     private suspend fun isAuthorized(event: SyncEvent): Boolean {
-        if (event.type == "ADD_TRIP" || event.type == "JOIN_TRIP") {
+        if (event.type == "ADD_TRIP" || event.type == "JOIN_TRIP" || event.type == "ADD_USER") {
             return true
         }
 
@@ -242,8 +242,9 @@ class EventProcessor(
             )
 
         val users =
-            rawUsers.map {
-                it.copy(
+            rawUsers.map { user ->
+                user.copy(
+                    isLocalPlayer = false, // When receiving ADD_TRIP from peer, remote users are not local player
                     lastEventId = event.eventId
                 )
             }

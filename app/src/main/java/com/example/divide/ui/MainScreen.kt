@@ -182,25 +182,45 @@ fun MainScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 24.dp)
         ) {
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Large, centered button to start a new trip setup
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(80.dp)
-                    .border(2.dp, Color.Black)
-                    .clickable { onCreateTrip() },
-                contentAlignment = Alignment.Center
+            // Row with Create Trip and Join Nearby Trip buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = "Create expense trip",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(70.dp)
+                        .border(2.dp, Color.Black)
+                        .clickable { onCreateTrip() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Create trip",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(70.dp)
+                        .border(2.dp, Color.Black)
+                        .clickable { permissionLauncher() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Join nearby trip",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 // Section for trips where payments are still pending
@@ -255,7 +275,7 @@ fun MainScreen(
             },
             dismissButton = {
                 TextButton(onClick = {
-                    syncViewModel?.startJoining("pending")
+                    syncViewModel?.joinNearbyTrip()
                     showSyncDialog = false
                 }) { Text("Join") }
             }

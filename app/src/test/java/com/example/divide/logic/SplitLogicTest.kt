@@ -35,9 +35,9 @@ class SplitLogicTest {
         // A paid 30, share is 10. A is owed 20.
         // B and C each owe 10.
         
-        val balanceA = balances.find { it.user.id == userA.id }?.amount ?: 0.0
-        val balanceB = balances.find { it.user.id == userB.id }?.amount ?: 0.0
-        val balanceC = balances.find { it.user.id == userC.id }?.amount ?: 0.0
+        val balanceA = balances.find { it.user.id == userA.id }?.amountRupees ?: 0.0
+        val balanceB = balances.find { it.user.id == userB.id }?.amountRupees ?: 0.0
+        val balanceC = balances.find { it.user.id == userC.id }?.amountRupees ?: 0.0
         
         assertEquals(20.0, balanceA, 0.001)
         assertEquals(-10.0, balanceB, 0.001)
@@ -67,9 +67,9 @@ class SplitLogicTest {
         
         val balances = SplitLogic.calculateBalances(tripWithDetails)
         
-        val balanceA = balances.find { it.user.id == userA.id }?.amount ?: 0.0
-        val balanceB = balances.find { it.user.id == userB.id }?.amount ?: 0.0
-        val balanceC = balances.find { it.user.id == userC.id }?.amount ?: 0.0
+        val balanceA = balances.find { it.user.id == userA.id }?.amountRupees ?: 0.0
+        val balanceB = balances.find { it.user.id == userB.id }?.amountRupees ?: 0.0
+        val balanceC = balances.find { it.user.id == userC.id }?.amountRupees ?: 0.0
         
         assertEquals(10.0, balanceA, 0.001)
         assertEquals(-10.0, balanceB, 0.001)
