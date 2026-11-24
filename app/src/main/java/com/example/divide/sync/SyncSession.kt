@@ -138,7 +138,7 @@ class SyncSession(
     ): Boolean {
         val endpointId = lastConnectedEndpointId ?: return false
         val (requestId, requestMsg) = syncProtocol.createPaymentInfoRequest(
-            groupId = groupId,
+            groupId = activeGroupId,
             targetPayeeUserId = targetPayeeUserId,
             amountRupees = amountRupees
         )
