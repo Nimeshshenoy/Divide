@@ -68,8 +68,21 @@ fun TripSetupScreen(
     pendingConnection?.let { pending ->
         AuthPinDialog(
             pendingConnection = pending,
-            onAccept = { syncViewModel?.acceptPendingConnection() },
-            onReject = { syncViewModel?.rejectPendingConnection() }
+            onAccept = { syncViewModel.acceptPendingConnection() },
+            onReject = { syncViewModel.rejectPendingConnection() }
+        )
+    }
+
+    if (syncState == SyncState.DISCONNECTED) {
+        ConnectionLostDialog(
+            onReconnect = {
+                syncViewModel?.dismissDisconnectedState()
+                syncViewModel?.startSearchingForFriends(draftTripId)
+                showAddParticipantDialog = true
+            },
+            onDismiss = {
+                syncViewModel?.dismissDisconnectedState()
+            }
         )
     }
 
@@ -319,7 +332,7 @@ fun TripSetupScreen(
                                 )
                             }
                         }
-                        SyncState.IDLE, SyncState.ERROR -> {
+                        SyncState.IDLE, SyncState.ERROR, SyncState.DISCONNECTED -> {
                             OutlinedButton(
                                 onClick = { permissionLauncher() },
                                 modifier = Modifier.fillMaxWidth()

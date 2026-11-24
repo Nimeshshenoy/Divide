@@ -116,6 +116,18 @@ fun AddExpenseScreen(
         )
     }
 
+    if (syncState == SyncState.DISCONNECTED) {
+        ConnectionLostDialog(
+            onReconnect = {
+                syncViewModel.dismissDisconnectedState()
+                permissionLauncher()
+            },
+            onDismiss = {
+                syncViewModel.dismissDisconnectedState()
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -124,9 +136,23 @@ fun AddExpenseScreen(
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
-                    val tint = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current
+                    val indicatorColor = when (syncState) {
+                        SyncState.CONNECTED -> Color.Green
+                        SyncState.DISCONNECTED -> Color(0xFFFFA000)
+                        SyncState.ERROR -> Color.Red
+                        else -> Color.Gray
+                    }
+                    val labelText = when (syncState) {
+                        SyncState.IDLE -> "Sync"
+                        SyncState.ADVERTISING -> "Hosting"
+                        SyncState.DISCOVERING -> "Searching"
+                        SyncState.CONNECTING -> "Connecting"
+                        SyncState.CONNECTED -> "Connected"
+                        SyncState.DISCONNECTED -> "Connection lost"
+                        SyncState.ERROR -> "Sync error"
+                    }
                     TextButton(onClick = {
-                        if (syncState == SyncState.IDLE) {
+                        if (syncState == SyncState.IDLE || syncState == SyncState.DISCONNECTED) {
                             permissionLauncher()
                         } else {
                             syncViewModel.stopSync()
@@ -135,29 +161,19 @@ fun AddExpenseScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(
-                                    color = if (syncState == SyncState.CONNECTED) Color.Green else Color.Red,
-                                    shape = CircleShape
-                                )
+                                .background(color = indicatorColor, shape = CircleShape)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            imageVector = if (syncState == SyncState.IDLE) Icons.Default.Sync else Icons.Default.Close,
+                            imageVector = if (syncState == SyncState.IDLE || syncState == SyncState.DISCONNECTED) Icons.Default.Sync else Icons.Default.Close,
                             contentDescription = "Sync",
-                            tint = tint,
+                            tint = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = when (syncState) {
-                                SyncState.IDLE -> "Sync"
-                                SyncState.ADVERTISING -> "Hosting"
-                                SyncState.DISCOVERING -> "Searching"
-                                SyncState.CONNECTING -> "Connecting"
-                                SyncState.ERROR -> "Sync error"
-                                SyncState.CONNECTED -> "Connected"
-                            },
-                            color = tint
+                            text = labelText,
+                            color = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current
                         )
                     }
                 }

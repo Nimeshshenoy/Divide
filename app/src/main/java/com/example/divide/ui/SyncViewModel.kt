@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-enum class SyncState { IDLE, ADVERTISING, DISCOVERING, CONNECTING, CONNECTED, ERROR }
+enum class SyncState { IDLE, ADVERTISING, DISCOVERING, CONNECTING, CONNECTED, DISCONNECTED, ERROR }
 
 sealed class PaymentInfoState {
     object Idle : PaymentInfoState()
@@ -98,7 +98,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
             },
             onDisconnected = { endpointId ->
                 session.onDisconnected(endpointId)
-                _syncState.value = SyncState.IDLE
+                _syncState.value = SyncState.DISCONNECTED
                 _pendingConnection.value = null
             },
             onConnectionFailed = { message ->
@@ -145,6 +145,12 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         _pendingConnection.value = null
         nearbyManager?.rejectConnection(pending.endpointId)
         _syncState.value = SyncState.IDLE
+    }
+
+    fun dismissDisconnectedState() {
+        if (_syncState.value == SyncState.DISCONNECTED) {
+            _syncState.value = SyncState.IDLE
+        }
     }
 
     fun startHosting(groupId: String) {

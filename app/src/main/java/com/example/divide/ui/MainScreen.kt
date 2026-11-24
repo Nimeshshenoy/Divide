@@ -137,14 +137,40 @@ fun MainScreen(
         }
     }
 
+    if (syncState == SyncState.DISCONNECTED) {
+        ConnectionLostDialog(
+            onReconnect = {
+                syncViewModel?.dismissDisconnectedState()
+                permissionLauncher()
+            },
+            onDismiss = {
+                syncViewModel?.dismissDisconnectedState()
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Divide") },
                 actions = {
-                    val tint = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current
+                    val indicatorColor = when (syncState) {
+                        SyncState.CONNECTED -> Color.Green
+                        SyncState.DISCONNECTED -> Color(0xFFFFA000)
+                        SyncState.ERROR -> Color.Red
+                        else -> Color.Gray
+                    }
+                    val labelText = when (syncState) {
+                        SyncState.IDLE -> "Sync"
+                        SyncState.ADVERTISING -> "Hosting"
+                        SyncState.DISCOVERING -> "Searching"
+                        SyncState.CONNECTING -> "Connecting"
+                        SyncState.CONNECTED -> "Connected"
+                        SyncState.DISCONNECTED -> "Connection lost"
+                        SyncState.ERROR -> "Sync error"
+                    }
                     TextButton(onClick = {
-                        if (syncState == SyncState.IDLE) {
+                        if (syncState == SyncState.IDLE || syncState == SyncState.DISCONNECTED) {
                             permissionLauncher()
                         } else {
                             syncViewModel?.stopSync()
@@ -153,29 +179,19 @@ fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(
-                                    color = if (syncState == SyncState.CONNECTED) Color.Green else Color.Red,
-                                    shape = CircleShape
-                                )
+                                .background(color = indicatorColor, shape = CircleShape)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            imageVector = if (syncState == SyncState.IDLE) Icons.Default.Sync else Icons.Default.Close,
+                            imageVector = if (syncState == SyncState.IDLE || syncState == SyncState.DISCONNECTED) Icons.Default.Sync else Icons.Default.Close,
                             contentDescription = "Sync",
-                            tint = tint,
+                            tint = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = when (syncState) {
-                                SyncState.IDLE -> "Sync"
-                                SyncState.ADVERTISING -> "Hosting"
-                                SyncState.DISCOVERING -> "Searching"
-                            SyncState.CONNECTING -> "Connecting"
-                            SyncState.ERROR -> "Sync error"
-                                SyncState.CONNECTED -> "Connected"
-                            },
-                            color = tint
+                            text = labelText,
+                            color = if (syncState == SyncState.CONNECTED) Color.Green else LocalContentColor.current
                         )
                     }
                     IconButton(onClick = onProfileClick) {
@@ -466,6 +482,61 @@ fun AuthPinDialog(
         dismissButton = {
             TextButton(onClick = onReject) {
                 Text("Reject")
+            }
+        }
+    )
+}
+
+/**
+ * A reassuring dialog displayed when a nearby peer disconnects.
+ */
+@Composable
+fun ConnectionLostDialog(
+    onReconnect: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Connection Lost")
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    text = "Connection to the nearby device was lost.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "🔒 Your local data is safe.\nAll expenses recorded on this device are saved locally. You can reconnect whenever the other device is available.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onReconnect) {
+                Text("Reconnect")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK")
             }
         }
     )
