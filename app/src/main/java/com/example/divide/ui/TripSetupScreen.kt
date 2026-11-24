@@ -58,13 +58,20 @@ fun TripSetupScreen(
     }
 
     var showAddParticipantDialog by remember { mutableStateOf(false) }
-    var showManualEntry by remember { mutableStateOf(false) }
-    var newParticipantName by remember { mutableStateOf("") }
 
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
     val discoveredUsers = syncViewModel?.discoveredUsers?.collectAsState()?.value ?: emptyList()
     val syncError = syncViewModel?.syncError?.collectAsState()?.value
     val connectedParticipant = syncViewModel?.connectedParticipant?.collectAsState()?.value
+    val pendingConnection = syncViewModel?.pendingConnection?.collectAsState()?.value
+
+    pendingConnection?.let { pending ->
+        AuthPinDialog(
+            pendingConnection = pending,
+            onAccept = { syncViewModel?.acceptPendingConnection() },
+            onReject = { syncViewModel?.rejectPendingConnection() }
+        )
+    }
 
     // Automatically add newly connected participant
     LaunchedEffect(connectedParticipant) {
@@ -121,8 +128,6 @@ fun TripSetupScreen(
                 }
                 OutlinedButton(
                     onClick = {
-                        newParticipantName = ""
-                        showManualEntry = false
                         showAddParticipantDialog = true
                     }
                 ) {
@@ -213,7 +218,7 @@ fun TripSetupScreen(
         }
     }
 
-    // Nearby discovery and manual entry for adding a participant
+    // Nearby discovery for adding a participant
     if (showAddParticipantDialog) {
         val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
             onPermissionsGranted = {
@@ -251,132 +256,93 @@ fun TripSetupScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
 
-                    if (showManualEntry) {
-                        OutlinedTextField(
-                            value = newParticipantName,
-                            onValueChange = { newParticipantName = it },
-                            label = { Text("Participant name") },
-                            placeholder = { Text("e.g. Rahul") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        when (syncState) {
-                            SyncState.DISCOVERING, SyncState.ADVERTISING -> {
-                                Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            if (discoveredUsers.isEmpty()) "Searching nearby devices (0 found)..." else "Found ${discoveredUsers.size} device(s):",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
+                    when (syncState) {
+                        SyncState.DISCOVERING, SyncState.ADVERTISING -> {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        if (discoveredUsers.isEmpty()) "Searching nearby devices (0 found)..." else "Found ${discoveredUsers.size} device(s):",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
 
-                                    if (discoveredUsers.isEmpty()) {
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(
-                                            "Make sure your friend's phone has Bluetooth and Location turned on, and is also on the Sync or Trip screen.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    } else {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        discoveredUsers.forEach { peer ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(peer.endpointName, fontWeight = FontWeight.SemiBold)
-                                                Button(onClick = { syncViewModel?.inviteFriend(peer.endpointId) }) {
-                                                    Text("Connect")
-                                                }
+                                if (discoveredUsers.isEmpty()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        "Make sure your friend's phone has Bluetooth and Location turned on, and is also on the Sync or Trip screen.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    discoveredUsers.forEach { peer ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(peer.endpointName, fontWeight = FontWeight.SemiBold)
+                                            Button(onClick = { syncViewModel?.inviteFriend(peer.endpointId) }) {
+                                                Text("Connect")
                                             }
                                         }
                                     }
                                 }
                             }
-                            SyncState.CONNECTING -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Connecting to device...", style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                            SyncState.CONNECTED -> {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.CheckCircle,
-                                        contentDescription = "Connected",
-                                        tint = Color.Green,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        "Connected! ${connectedParticipant?.name ?: "Friend"} added to trip.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                            SyncState.IDLE, SyncState.ERROR -> {
-                                OutlinedButton(
-                                    onClick = { permissionLauncher() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(if (syncState == SyncState.ERROR) "Retry Nearby Search" else "Find Nearby Devices")
-                                }
+                        }
+                        SyncState.CONNECTING -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("Connecting to device...", style = MaterialTheme.typography.bodyMedium)
                             }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (!showManualEntry && syncState != SyncState.CONNECTED) {
-                        TextButton(
-                            onClick = { showManualEntry = true },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text("Type name manually instead")
-                        }
-                    }
-
-                    if (showManualEntry) {
-                        TextButton(
-                            onClick = { showManualEntry = false },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text("Back to Nearby Search")
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                if (showManualEntry) {
-                    Button(
-                        onClick = {
-                            val nameTrimmed = newParticipantName.trim()
-                            if (nameTrimmed.isNotBlank()) {
-                                currentParticipants = currentParticipants + User(
-                                    id = UUID.randomUUID().toString(),
-                                    name = nameTrimmed,
-                                    groupId = draftTripId
+                        SyncState.CONNECTED -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Connected",
+                                    tint = Color.Green,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    "Connected! ${connectedParticipant?.name ?: "Friend"} added to trip.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
-                            syncViewModel?.stopSync()
-                            showAddParticipantDialog = false
-                        },
-                        enabled = newParticipantName.trim().isNotBlank()
-                    ) {
-                        Text("Add Participant")
+                        }
+                        SyncState.IDLE, SyncState.ERROR -> {
+                            OutlinedButton(
+                                onClick = { permissionLauncher() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(if (syncState == SyncState.ERROR) "Retry Nearby Search" else "Find Nearby Devices")
+                            }
+                        }
+                    }
+
+                    if (syncState != SyncState.CONNECTED) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(
+                            onClick = {
+                                syncViewModel?.simulateTestDeviceConnection(draftTripId)
+                            },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Text("🧪 Simulate Test Device Connection")
+                        }
                     }
                 }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = {
                     syncViewModel?.stopSync()

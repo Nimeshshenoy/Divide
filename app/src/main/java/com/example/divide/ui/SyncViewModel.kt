@@ -28,6 +28,12 @@ sealed class PaymentInfoState {
 
 data class DiscoveredUser(val endpointId: String, val endpointName: String)
 
+data class PendingConnection(
+    val endpointId: String,
+    val endpointName: String,
+    val authDigits: String
+)
+
 class SyncViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val dao = ExpenseDatabase.getDatabase(context).expenseDao()
@@ -38,6 +44,9 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _discoveredUsers = MutableStateFlow<List<DiscoveredUser>>(emptyList())
     val discoveredUsers: StateFlow<List<DiscoveredUser>> = _discoveredUsers
+
+    private val _pendingConnection = MutableStateFlow<PendingConnection?>(null)
+    val pendingConnection: StateFlow<PendingConnection?> = _pendingConnection
 
     private val _connectedParticipant = MutableStateFlow<com.example.divide.data.User?>(null)
     val connectedParticipant: StateFlow<com.example.divide.data.User?> = _connectedParticipant
@@ -84,21 +93,27 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
                 _syncError.value = null
                 _syncState.value = SyncState.CONNECTED
                 _discoveredUsers.value = emptyList()
+                _pendingConnection.value = null
                 session.onConnected(endpointId)
             },
             onDisconnected = { endpointId ->
                 session.onDisconnected(endpointId)
                 _syncState.value = SyncState.IDLE
+                _pendingConnection.value = null
             },
             onConnectionFailed = { message ->
                 _syncState.value = SyncState.ERROR
                 _syncError.value = message
+                _pendingConnection.value = null
             },
             onEndpointDiscovered = { endpointId, endpointName ->
                 val currentList = _discoveredUsers.value
                 if (currentList.none { it.endpointId == endpointId }) {
                     _discoveredUsers.value = currentList + DiscoveredUser(endpointId, endpointName)
                 }
+            },
+            onConnectionInitiated = { endpointId, endpointName, authDigits ->
+                _pendingConnection.value = PendingConnection(endpointId, endpointName, authDigits)
             }
         )
         session.attachNearbyManager(manager)
@@ -117,6 +132,19 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
             _syncState.value = SyncState.DISCOVERING
             manager.startDiscovery()
         }
+    }
+
+    fun acceptPendingConnection() {
+        val pending = _pendingConnection.value ?: return
+        _pendingConnection.value = null
+        nearbyManager?.acceptConnection(pending.endpointId)
+    }
+
+    fun rejectPendingConnection() {
+        val pending = _pendingConnection.value ?: return
+        _pendingConnection.value = null
+        nearbyManager?.rejectConnection(pending.endpointId)
+        _syncState.value = SyncState.IDLE
     }
 
     fun startHosting(groupId: String) {
@@ -145,12 +173,48 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun inviteFriend(endpointId: String) {
+        if (endpointId == "simulated_endpoint_id") {
+            simulateTestDeviceConnection("pending")
+            return
+        }
         _syncState.value = SyncState.CONNECTING
         _syncError.value = null
         nearbyManager?.requestConnection(endpointId)
     }
 
+    /**
+     * Simulates a successful connection from a test device (Alex) for single-device testing.
+     */
+    fun simulateTestDeviceConnection(groupId: String = "pending") {
+        val simulatedUserId = "simulated_alex_101"
+        val simulatedUser = com.example.divide.data.User(
+            id = simulatedUserId,
+            name = "Alex (Test Device)",
+            groupId = groupId,
+            isLocalPlayer = false,
+            upiId = "alex@upi"
+        )
+        _syncError.value = null
+        _syncState.value = SyncState.CONNECTED
+        _discoveredUsers.value = emptyList()
+        _connectedParticipant.value = simulatedUser
+        LocalRepository.addUserToTrip(simulatedUser)
+    }
+
     fun requestLivePaymentInfo(targetPayeeUserId: String, amountRupees: Double): Boolean {
+        if (targetPayeeUserId == "simulated_alex_101") {
+            _paymentInfoState.value = PaymentInfoState.Success(
+                PaymentInfoResponsePayload(
+                    requestId = "sim_req_1",
+                    groupId = syncSession?.activeGroupId ?: "pending",
+                    payeeUserId = "simulated_alex_101",
+                    payeeName = "Alex (Test Device)",
+                    upiId = "alex@upi",
+                    amountRupees = amountRupees
+                )
+            )
+            return true
+        }
         val session = syncSession ?: return false
         paymentTimeoutJob?.cancel()
         _paymentInfoState.value = PaymentInfoState.Requesting
@@ -183,6 +247,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         syncSession = null
         _discoveredUsers.value = emptyList()
         _connectedParticipant.value = null
+        _pendingConnection.value = null
         _syncError.value = null
         _syncState.value = SyncState.IDLE
         _paymentInfoState.value = PaymentInfoState.Idle

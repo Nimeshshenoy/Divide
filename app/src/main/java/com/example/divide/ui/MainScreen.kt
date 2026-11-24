@@ -62,6 +62,15 @@ fun MainScreen(
     // Observe Sync ViewModel State for Live Payment Info Requests
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
     val paymentInfoState = syncViewModel?.paymentInfoState?.collectAsState()?.value ?: PaymentInfoState.Idle
+    val pendingConnection = syncViewModel?.pendingConnection?.collectAsState()?.value
+
+    pendingConnection?.let { pending ->
+        AuthPinDialog(
+            pendingConnection = pending,
+            onAccept = { syncViewModel?.acceptPendingConnection() },
+            onReject = { syncViewModel?.rejectPendingConnection() }
+        )
+    }
 
     val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
         onPermissionsGranted = { showSyncDialog = true }
@@ -265,13 +274,21 @@ fun MainScreen(
         AlertDialog(
             onDismissRequest = { showSyncDialog = false },
             title = { Text("Sync / Join Nearby Trip") },
-            text = { Text("Choose Host to share your trip with nearby friends, or Join to discover and receive a trip from a nearby host.") },
+            text = { Text("Choose Host to share your trip with nearby friends, Join to discover a nearby host, or Simulate to test with 1 phone.") },
             confirmButton = {
-                TextButton(onClick = {
-                    val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
-                    syncViewModel?.startHosting(activeTripId)
-                    showSyncDialog = false
-                }) { Text("Host") }
+                Row {
+                    TextButton(onClick = {
+                        val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
+                        syncViewModel?.simulateTestDeviceConnection(activeTripId)
+                        showSyncDialog = false
+                    }) { Text("🧪 Simulate") }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(onClick = {
+                        val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
+                        syncViewModel?.startHosting(activeTripId)
+                        showSyncDialog = false
+                    }) { Text("Host") }
+                }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -402,6 +419,56 @@ fun MainScreen(
             }
         )
     }
+}
+
+/**
+ * A dialog showing the 4-digit authentication PIN to verify nearby device connections securely.
+ */
+@Composable
+fun AuthPinDialog(
+    pendingConnection: PendingConnection,
+    onAccept: () -> Unit,
+    onReject: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onReject,
+        title = { Text("Confirm Device Connection") },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Verify that the 4-digit PIN matches on ${pendingConnection.endpointName}'s screen:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.padding(8.dp)
+                ) {
+                    Text(
+                        text = pendingConnection.authDigits,
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 6.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onAccept) {
+                Text("Confirm & Connect")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onReject) {
+                Text("Reject")
+            }
+        }
+    )
 }
 
 /**

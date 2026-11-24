@@ -18,7 +18,8 @@ class NearbyManager(
     private val onConnected: ((endpointId: String) -> Unit)? = null,
     private val onDisconnected: ((endpointId: String) -> Unit)? = null,
     private val onEndpointDiscovered: ((endpointId: String, endpointName: String) -> Unit)? = null,
-    private val onConnectionFailed: ((message: String) -> Unit)? = null
+    private val onConnectionFailed: ((message: String) -> Unit)? = null,
+    private val onConnectionInitiated: ((endpointId: String, endpointName: String, authDigits: String) -> Unit)? = null
 ) {
 
     companion object {
@@ -185,6 +186,22 @@ class NearbyManager(
             }
     }
 
+    fun acceptConnection(endpointId: String) {
+        connectionsClient
+            .acceptConnection(
+                endpointId,
+                payloadCallback
+            )
+            .addOnFailureListener { error ->
+                Log.e(TAG, "Accept connection failed", error)
+                onConnectionFailed?.invoke(error.localizedMessage ?: "Failed to accept connection")
+            }
+    }
+
+    fun rejectConnection(endpointId: String) {
+        connectionsClient.rejectConnection(endpointId)
+    }
+
     // =========================================================
     // CONNECTION LIFECYCLE
     // =========================================================
@@ -199,24 +216,18 @@ class NearbyManager(
 
                 Log.d(
                     TAG,
-                    "Connection initiated with ${info.endpointName}"
+                    "Connection initiated with ${info.endpointName}, authDigits: ${info.authenticationDigits}"
                 )
 
-                /*
-                 * DEVELOPMENT ONLY:
-                 *
-                 * Automatically accept.
-                 *
-                 * Later, DO NOT blindly auto-accept strangers.
-                 *
-                 * Nearby gives both phones authentication digits.
-                 * Google recommends authenticating the connection.
-                 */
-                connectionsClient
-                    .acceptConnection(
+                if (onConnectionInitiated != null) {
+                    onConnectionInitiated.invoke(
                         endpointId,
-                        payloadCallback
+                        info.endpointName,
+                        info.authenticationDigits
                     )
+                } else {
+                    connectionsClient.acceptConnection(endpointId, payloadCallback)
+                }
             }
 
             override fun onConnectionResult(
