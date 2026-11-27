@@ -129,6 +129,7 @@ class EventProcessorTest {
         override suspend fun getSyncEventById(eventId: String): SyncEvent? = events[eventId]
         override suspend fun getExpenseById(expenseId: String): Expense? = expenses.find { it.id == expenseId }
         override suspend fun getGroupById(groupId: String): Group? = groups.find { it.id == groupId }
+        override suspend fun getAllTripIds(): List<String> = groups.map { it.id }
         override suspend fun getUserById(userId: String): User? = users.find { it.id == userId }
         override suspend fun isUserMemberOfGroup(userId: String, groupId: String): Boolean = true
         override suspend fun getSyncEventIdsForGroup(groupId: String): List<String> = events.values.filter { it.groupId == groupId }.map { it.eventId }

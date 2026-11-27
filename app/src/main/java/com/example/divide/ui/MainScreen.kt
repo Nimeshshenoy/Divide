@@ -47,8 +47,9 @@ fun MainScreen(
     onTripClick: (String) -> Unit,
     onProfileClick: () -> Unit
 ) {
-    // Observe the list of trips (with their nested details) from our repository
+    // Observe the list of trips and profile from our repository
     val trips by LocalRepository.trips.collectAsState()
+    val profile by LocalRepository.profile.collectAsState()
     
     // Separate trips into Unsettled and Settled categories based on the 'group' metadata
     val unsettled = trips.filter { !it.group.isSettled }
@@ -59,6 +60,8 @@ fun MainScreen(
     var missingUpiUser by remember { mutableStateOf<User?>(null) }
     var pendingPayUser by remember { mutableStateOf<Pair<User, Double>?>(null) }
     var showSyncDialog by remember { mutableStateOf(false) }
+    var showNameSetupDialog by remember { mutableStateOf(false) }
+    var setupNameInput by remember(profile) { mutableStateOf(if (profile.name == "Me") "" else profile.name) }
 
     // Observe Sync ViewModel State for Live Payment Info Requests
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
@@ -76,7 +79,13 @@ fun MainScreen(
     }
 
     val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
-        onPermissionsGranted = { showSyncDialog = true }
+        onPermissionsGranted = {
+            if (!profile.isProfileConfigured) {
+                showNameSetupDialog = true
+            } else {
+                showSyncDialog = true
+            }
+        }
     )
 
     // Handle incoming live payment info response or timeout
@@ -286,6 +295,51 @@ fun MainScreen(
                 }
             }
         }
+    }
+
+    // First-time Profile Name Setup Dialog before launching Nearby Sync
+    if (showNameSetupDialog) {
+        AlertDialog(
+            onDismissRequest = { showNameSetupDialog = false },
+            title = { Text("Set Your Display Name") },
+            text = {
+                Column {
+                    Text(
+                        text = "Choose a display name your friends will recognize before searching for nearby devices.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedTextField(
+                        value = setupNameInput,
+                        onValueChange = { setupNameInput = it },
+                        label = { Text("Display Name") },
+                        placeholder = { Text("e.g. Alex, Sam, Nimesh") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val trimmed = setupNameInput.trim()
+                        if (trimmed.isNotBlank()) {
+                            LocalRepository.updateProfile(trimmed)
+                            showNameSetupDialog = false
+                            showSyncDialog = true
+                        }
+                    },
+                    enabled = setupNameInput.trim().isNotBlank()
+                ) {
+                    Text("Save & Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNameSetupDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     // Nearby Host/Join Dialog

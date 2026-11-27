@@ -242,11 +242,22 @@ class EventProcessor(
             )
 
         val users =
-            rawUsers.map { user ->
-                user.copy(
-                    isLocalPlayer = false, // When receiving ADD_TRIP from peer, remote users are not local player
-                    lastEventId = event.eventId
-                )
+            rawUsers.map { incomingUser ->
+                val existingUser = dao.getUserByIdAndGroup(incomingUser.id, incomingGroup.id)
+                val isLocal = existingUser?.isLocalPlayer == true
+                if (existingUser != null) {
+                    existingUser.copy(
+                        name = incomingUser.name,
+                        upiId = incomingUser.upiId ?: existingUser.upiId,
+                        isLocalPlayer = isLocal,
+                        lastEventId = event.eventId
+                    )
+                } else {
+                    incomingUser.copy(
+                        isLocalPlayer = false,
+                        lastEventId = event.eventId
+                    )
+                }
             }
 
         val existingGroup =
@@ -567,8 +578,9 @@ class EventProcessor(
             )
 
         val existingUser =
-            dao.getUserById(
-                incomingUser.id
+            dao.getUserByIdAndGroup(
+                incomingUser.id,
+                incomingUser.groupId
             )
 
         if (
@@ -577,18 +589,20 @@ class EventProcessor(
                 existingUser?.lastEventId
             )
         ) {
+            val mergedUser = if (existingUser != null) {
+                existingUser.copy(
+                    name = incomingUser.name,
+                    upiId = incomingUser.upiId ?: existingUser.upiId,
+                    lastEventId = event.eventId
+                )
+            } else {
+                incomingUser.copy(
+                    lastEventId = event.eventId
+                )
+            }
 
-            /*
-             * IMPORTANT:
-             *
-             * updateUserWithSync() should itself be a Room
-             * @Transaction containing:
-             *
-             * 1. insert/update User
-             * 2. insert SyncEvent
-             */
             dao.updateUserWithSync(
-                incomingUser,
+                mergedUser,
                 event
             )
 
@@ -615,13 +629,13 @@ class EventProcessor(
                 User::class.java
             ).copy(
                 groupId = event.groupId,
-                isLocalPlayer = false,
                 lastEventId = event.eventId
             )
 
         val existingUser =
-            dao.getUserById(
-                incomingUser.id
+            dao.getUserByIdAndGroup(
+                incomingUser.id,
+                event.groupId
             )
 
         if (
@@ -630,8 +644,21 @@ class EventProcessor(
                 existingUser?.lastEventId
             )
         ) {
+            val mergedUser = if (existingUser != null) {
+                existingUser.copy(
+                    name = incomingUser.name,
+                    upiId = incomingUser.upiId ?: existingUser.upiId,
+                    lastEventId = event.eventId
+                )
+            } else {
+                incomingUser.copy(
+                    isLocalPlayer = false,
+                    lastEventId = event.eventId
+                )
+            }
+
             dao.updateUserWithSync(
-                incomingUser,
+                mergedUser,
                 event
             )
 

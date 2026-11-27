@@ -95,6 +95,22 @@ data class EventAckPayload(
     val ackingUserId: String
 )
 
+/**
+ * Exchanges all local trip IDs known to a device.
+ */
+data class AllTripIdsPayload(
+    val senderUserId: String,
+    val tripIds: List<String>
+)
+
+/**
+ * Requests complete missing trip payloads and membership events for specific trip IDs.
+ */
+data class RequestMissingTripsPayload(
+    val requestingUserId: String,
+    val missingTripIds: List<String>
+)
+
 object MessageType {
     const val HELLO = "HELLO"
     const val PARTICIPANT = "PARTICIPANT"
@@ -102,6 +118,8 @@ object MessageType {
     const val REQUEST_EVENTS = "REQUEST_EVENTS"
     const val EVENT_BATCH = "EVENT_BATCH"
     const val EVENT_ACK = "EVENT_ACK"
+    const val ALL_TRIP_IDS = "ALL_TRIP_IDS"
+    const val REQUEST_MISSING_TRIPS = "REQUEST_MISSING_TRIPS"
     const val REQUEST_PAYMENT_INFO = "REQUEST_PAYMENT_INFO"
     const val PAYMENT_INFO_RESPONSE = "PAYMENT_INFO_RESPONSE"
 }

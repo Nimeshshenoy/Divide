@@ -211,6 +211,30 @@ class SyncProtocol(
         )
     }
 
+    suspend fun getAllLocalTripIds(): List<String> = dao.getAllTripIds()
+
+    fun createAllTripIdsMessage(tripIds: List<String>): NetworkMessage {
+        val payload = AllTripIdsPayload(
+            senderUserId = localUserId,
+            tripIds = tripIds
+        )
+        return NetworkMessage(
+            type = MessageType.ALL_TRIP_IDS,
+            payload = gson.toJson(payload)
+        )
+    }
+
+    fun createMissingTripsRequest(missingTripIds: List<String>): NetworkMessage {
+        val payload = RequestMissingTripsPayload(
+            requestingUserId = localUserId,
+            missingTripIds = missingTripIds
+        )
+        return NetworkMessage(
+            type = MessageType.REQUEST_MISSING_TRIPS,
+            payload = gson.toJson(payload)
+        )
+    }
+
     /**
      * Creates an on-demand message requesting payment details for a specific payee, returning the generated requestId.
      */

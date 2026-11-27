@@ -19,6 +19,9 @@ interface ExpenseDao {
     @Query("SELECT * FROM `groups` WHERE id = :groupId")
     suspend fun getTripWithDetailsById(groupId: String): TripWithDetails?
 
+    @Query("SELECT id FROM `groups`")
+    suspend fun getAllTripIds(): List<String>
+
     @Query("SELECT * FROM profile WHERE id = 0")
     fun getProfile(): Flow<Profile?>
 

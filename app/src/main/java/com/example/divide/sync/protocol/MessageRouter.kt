@@ -18,7 +18,9 @@ class MessageRouter(
     private val onParticipantReceived: ((ParticipantPayload) -> Unit)? = null,
     private val onGroupIdAdopted: ((String) -> Unit)? = null,
     private val onEventAckReceived: ((EventAckPayload) -> Unit)? = null,
-    private val onEventsReceived: ((List<String>) -> Unit)? = null
+    private val onEventsReceived: ((List<String>) -> Unit)? = null,
+    private val onAllTripIdsReceived: (suspend (AllTripIdsPayload) -> NetworkMessage?)? = null,
+    private val onRequestMissingTripsReceived: (suspend (RequestMissingTripsPayload) -> Unit)? = null
 ) {
 
     private val gson = Gson()
@@ -160,6 +162,30 @@ class MessageRouter(
                 if (resolveGroupId(ackPayload.groupId)) {
                     onEventAckReceived?.invoke(ackPayload)
                 }
+
+                null
+            }
+
+            MessageType.ALL_TRIP_IDS -> {
+
+                val payload =
+                    gson.fromJson(
+                        message.payload,
+                        AllTripIdsPayload::class.java
+                    )
+
+                onAllTripIdsReceived?.invoke(payload)
+            }
+
+            MessageType.REQUEST_MISSING_TRIPS -> {
+
+                val request =
+                    gson.fromJson(
+                        message.payload,
+                        RequestMissingTripsPayload::class.java
+                    )
+
+                onRequestMissingTripsReceived?.invoke(request)
 
                 null
             }

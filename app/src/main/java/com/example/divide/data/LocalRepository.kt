@@ -147,7 +147,8 @@ object LocalRepository {
             // 1. Update the primary profile
             val updatedProfile = oldProfile.copy(
                 name = newName,
-                upiId = formattedUpi
+                upiId = formattedUpi,
+                isProfileConfigured = true
             )
             dao?.insertProfile(updatedProfile)
 

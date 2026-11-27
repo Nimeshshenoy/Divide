@@ -15,5 +15,6 @@ data class Profile(
     val id: Int = 0,
     val userId: String = UUID.randomUUID().toString(), // Distributed Identity
     val name: String = "Me",
-    val upiId: String? = null
+    val upiId: String? = null,
+    val isProfileConfigured: Boolean = false
 )

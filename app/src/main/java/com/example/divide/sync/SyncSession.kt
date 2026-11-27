@@ -25,6 +25,7 @@ class SyncSession(
 
     private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val acknowledgedEventIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private val sharedTripIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
     private var liveSyncJob: Job? = null
 
     var activeGroupId: String = groupId
@@ -58,6 +59,7 @@ class SyncSession(
             },
             onGroupIdAdopted = { adoptedId ->
                 activeGroupId = adoptedId
+                sharedTripIds.add(adoptedId)
                 onGroupIdAdopted?.invoke(adoptedId)
                 lastConnectedEndpointId?.let { endpointId ->
                     startLiveEventSync(endpointId)
@@ -68,6 +70,38 @@ class SyncSession(
             },
             onEventsReceived = { eventIds ->
                 acknowledgedEventIds.addAll(eventIds)
+            },
+            onAllTripIdsReceived = { payload ->
+                val localTripIds = syncProtocol.getAllLocalTripIds().toSet()
+                val peerTripIds = payload.tripIds.toSet()
+                val missingOnLocal = peerTripIds - localTripIds
+
+                sharedTripIds.addAll(localTripIds intersect peerTripIds)
+                sharedTripIds.addAll(peerTripIds)
+
+                if (missingOnLocal.isNotEmpty()) {
+                    val req = syncProtocol.createMissingTripsRequest(missingOnLocal.toList())
+                    lastConnectedEndpointId?.let { ep -> nearbyManager.send(ep, req) }
+                }
+
+                // Run historical EVENT_IDS reconciliation for all shared trips
+                for (sharedGroupId in sharedTripIds) {
+                    if (sharedGroupId.isNotEmpty() && sharedGroupId != "pending") {
+                        val eventIdsMsg = syncProtocol.createEventIdsMessage(sharedGroupId)
+                        lastConnectedEndpointId?.let { ep -> nearbyManager.send(ep, eventIdsMsg) }
+                    }
+                }
+
+                lastConnectedEndpointId?.let { ep -> startLiveEventSync(ep) }
+                null
+            },
+            onRequestMissingTripsReceived = { request ->
+                for (missingGroupId in request.missingTripIds) {
+                    val addTripMsg = syncProtocol.createAddTripMessage(missingGroupId)
+                    if (addTripMsg != null) {
+                        lastConnectedEndpointId?.let { ep -> nearbyManager.send(ep, addTripMsg) }
+                    }
+                }
             }
         )
 
@@ -107,9 +141,17 @@ class SyncSession(
         // 1. Ensure local device identity is logged for this group
         if (activeGroupId.isNotEmpty() && activeGroupId != "pending") {
             LocalRepository.joinTrip(activeGroupId)
+            sharedTripIds.add(activeGroupId)
         }
 
-        // 2. Send HELLO handshake and Participant Payload
+        // 2. Exchange ALL_TRIP_IDS across devices
+        sessionScope.launch {
+            val allLocalTripIds = syncProtocol.getAllLocalTripIds()
+            val allTripIdsMsg = syncProtocol.createAllTripIdsMessage(allLocalTripIds)
+            nearbyManager.send(endpointId, allTripIdsMsg)
+        }
+
+        // 3. Send HELLO handshake and Participant Payload
         val hello =
             syncProtocol.createHello(
                 activeGroupId
@@ -125,9 +167,9 @@ class SyncSession(
             syncProtocol.createParticipantMessage(activeGroupId)
         )
 
-        // 3. If hosting/connected to a specific group, transmit ADD_TRIP event payload
+        // 4. Transmit ADD_TRIP event payload for active group
         if (activeGroupId.isNotEmpty() && activeGroupId != "pending") {
-            CoroutineScope(Dispatchers.IO).launch {
+            sessionScope.launch {
                 val addTripMsg = syncProtocol.createAddTripMessage(activeGroupId)
                 if (addTripMsg != null) {
                     nearbyManager.send(endpointId, addTripMsg)
@@ -135,35 +177,45 @@ class SyncSession(
             }
         }
 
-        // 4. Start live Flow-based event observation & transmission
+        // 5. Start live Flow-based event observation & transmission for all shared trips
         startLiveEventSync(endpointId)
     }
 
     /**
-     * Observes the Room database Flow for new SyncEvents in real time, transmitting
-     * unacknowledged events to the peer with echo prevention and retry fallback.
+     * Observes the Room database Flow for new SyncEvents in real time across ALL shared trips,
+     * transmitting unacknowledged events to the peer with echo prevention and retry fallback.
      */
     private fun startLiveEventSync(endpointId: String) {
         liveSyncJob?.cancel()
         liveSyncJob = sessionScope.launch {
-            val initialKnown = syncProtocol.getKnownEventIds(activeGroupId)
-            acknowledgedEventIds.addAll(initialKnown)
+            val allTripIds = (syncProtocol.getAllLocalTripIds() + sharedTripIds + activeGroupId)
+                .filter { it.isNotEmpty() && it != "pending" }
+                .distinct()
 
-            syncProtocol.getSyncEventsFlowForGroup(activeGroupId).collect { events ->
-                val unackedEvents = events.filter { event ->
-                    event.eventId !in acknowledgedEventIds && syncProtocol.isLocalUser(event.authorId)
-                }
+            for (gId in allTripIds) {
+                val initialKnown = syncProtocol.getKnownEventIds(gId)
+                acknowledgedEventIds.addAll(initialKnown)
+            }
 
-                if (unackedEvents.isNotEmpty()) {
-                    val batchMsg = syncProtocol.createLiveEventBatchMessage(activeGroupId, unackedEvents)
-                    val sent = nearbyManager.send(endpointId, batchMsg)
-                    if (sent) {
-                        sessionScope.launch {
-                            delay(3000L)
-                            val stillUnacked = unackedEvents.filter { it.eventId !in acknowledgedEventIds }
-                            if (stillUnacked.isNotEmpty() && lastConnectedEndpointId == endpointId) {
-                                val retryMsg = syncProtocol.createLiveEventBatchMessage(activeGroupId, stillUnacked)
-                                nearbyManager.send(endpointId, retryMsg)
+            for (gId in allTripIds) {
+                launch {
+                    syncProtocol.getSyncEventsFlowForGroup(gId).collect { events ->
+                        val unackedEvents = events.filter { event ->
+                            event.eventId !in acknowledgedEventIds && syncProtocol.isLocalUser(event.authorId)
+                        }
+
+                        if (unackedEvents.isNotEmpty()) {
+                            val batchMsg = syncProtocol.createLiveEventBatchMessage(gId, unackedEvents)
+                            val sent = nearbyManager.send(endpointId, batchMsg)
+                            if (sent) {
+                                sessionScope.launch {
+                                    delay(3000L)
+                                    val stillUnacked = unackedEvents.filter { it.eventId !in acknowledgedEventIds }
+                                    if (stillUnacked.isNotEmpty() && lastConnectedEndpointId == endpointId) {
+                                        val retryMsg = syncProtocol.createLiveEventBatchMessage(gId, stillUnacked)
+                                        nearbyManager.send(endpointId, retryMsg)
+                                    }
+                                }
                             }
                         }
                     }
@@ -180,6 +232,7 @@ class SyncSession(
             liveSyncJob?.cancel()
             liveSyncJob = null
             acknowledgedEventIds.clear()
+            sharedTripIds.clear()
             clearPendingPaymentRequest()
         }
     }
