@@ -7,6 +7,9 @@ import com.example.divide.sync.protocol.NetworkMessage
 import com.example.divide.sync.protocol.PaymentInfoResponsePayload
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -19,6 +22,10 @@ class SyncSession(
 
     private lateinit var nearbyManager: NearbyManager
     private var lastConnectedEndpointId: String? = null
+
+    private val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val acknowledgedEventIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+    private var liveSyncJob: Job? = null
 
     var activeGroupId: String = groupId
         private set
@@ -52,6 +59,15 @@ class SyncSession(
             onGroupIdAdopted = { adoptedId ->
                 activeGroupId = adoptedId
                 onGroupIdAdopted?.invoke(adoptedId)
+                lastConnectedEndpointId?.let { endpointId ->
+                    startLiveEventSync(endpointId)
+                }
+            },
+            onEventAckReceived = { ack ->
+                acknowledgedEventIds.addAll(ack.eventIds)
+            },
+            onEventsReceived = { eventIds ->
+                acknowledgedEventIds.addAll(eventIds)
             }
         )
 
@@ -118,6 +134,42 @@ class SyncSession(
                 }
             }
         }
+
+        // 4. Start live Flow-based event observation & transmission
+        startLiveEventSync(endpointId)
+    }
+
+    /**
+     * Observes the Room database Flow for new SyncEvents in real time, transmitting
+     * unacknowledged events to the peer with echo prevention and retry fallback.
+     */
+    private fun startLiveEventSync(endpointId: String) {
+        liveSyncJob?.cancel()
+        liveSyncJob = sessionScope.launch {
+            val initialKnown = syncProtocol.getKnownEventIds(activeGroupId)
+            acknowledgedEventIds.addAll(initialKnown)
+
+            syncProtocol.getSyncEventsFlowForGroup(activeGroupId).collect { events ->
+                val unackedEvents = events.filter { event ->
+                    event.eventId !in acknowledgedEventIds && syncProtocol.isLocalUser(event.authorId)
+                }
+
+                if (unackedEvents.isNotEmpty()) {
+                    val batchMsg = syncProtocol.createLiveEventBatchMessage(activeGroupId, unackedEvents)
+                    val sent = nearbyManager.send(endpointId, batchMsg)
+                    if (sent) {
+                        sessionScope.launch {
+                            delay(3000L)
+                            val stillUnacked = unackedEvents.filter { it.eventId !in acknowledgedEventIds }
+                            if (stillUnacked.isNotEmpty() && lastConnectedEndpointId == endpointId) {
+                                val retryMsg = syncProtocol.createLiveEventBatchMessage(activeGroupId, stillUnacked)
+                                nearbyManager.send(endpointId, retryMsg)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun onDisconnected(
@@ -125,6 +177,9 @@ class SyncSession(
     ) {
         if (lastConnectedEndpointId == endpointId) {
             lastConnectedEndpointId = null
+            liveSyncJob?.cancel()
+            liveSyncJob = null
+            acknowledgedEventIds.clear()
             clearPendingPaymentRequest()
         }
     }

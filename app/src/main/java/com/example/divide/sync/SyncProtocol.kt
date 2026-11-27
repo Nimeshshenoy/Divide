@@ -27,6 +27,12 @@ class SyncProtocol(
         const val PROTOCOL_VERSION = 1
     }
 
+    fun getSyncEventsFlowForGroup(groupId: String) = dao.getSyncEventsFlowForGroup(groupId)
+
+    suspend fun getKnownEventIds(groupId: String): List<String> = dao.getSyncEventIdsForGroup(groupId)
+
+    fun isLocalUser(authorId: String): Boolean = authorId == localUserId
+
     fun createParticipantMessage(groupId: String): NetworkMessage {
         return NetworkMessage(
             type = MessageType.PARTICIPANT,
@@ -168,6 +174,41 @@ class SyncProtocol(
 
             eventProcessor.processIncomingEvent(event)
         }
+    }
+
+    /**
+     * Creates an EVENT_ACK message to confirm receipt of specific sync events.
+     */
+    fun createEventAckMessage(
+        groupId: String,
+        eventIds: List<String>
+    ): NetworkMessage {
+        val ackPayload = EventAckPayload(
+            groupId = groupId,
+            eventIds = eventIds,
+            ackingUserId = localUserId
+        )
+        return NetworkMessage(
+            type = MessageType.EVENT_ACK,
+            payload = gson.toJson(ackPayload)
+        )
+    }
+
+    /**
+     * Creates an EVENT_BATCH NetworkMessage for a given list of SyncEvents.
+     */
+    fun createLiveEventBatchMessage(
+        groupId: String,
+        events: List<SyncEvent>
+    ): NetworkMessage {
+        val batch = EventBatchPayload(
+            groupId = groupId,
+            events = events
+        )
+        return NetworkMessage(
+            type = MessageType.EVENT_BATCH,
+            payload = gson.toJson(batch)
+        )
     }
 
     /**

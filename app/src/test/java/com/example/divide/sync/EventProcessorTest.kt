@@ -132,6 +132,7 @@ class EventProcessorTest {
         override suspend fun getUserById(userId: String): User? = users.find { it.id == userId }
         override suspend fun isUserMemberOfGroup(userId: String, groupId: String): Boolean = true
         override suspend fun getSyncEventIdsForGroup(groupId: String): List<String> = events.values.filter { it.groupId == groupId }.map { it.eventId }
+        override fun getSyncEventsFlowForGroup(groupId: String): Flow<List<SyncEvent>> = kotlinx.coroutines.flow.flowOf(events.values.filter { it.groupId == groupId })
         override suspend fun getAddTripSyncEventForGroup(groupId: String): SyncEvent? = events.values.firstOrNull { it.groupId == groupId && it.type == "ADD_TRIP" }
         override suspend fun getSyncEventsByIds(groupId: String, eventIds: List<String>): List<SyncEvent> = events.values.filter { it.groupId == groupId && it.eventId in eventIds }
         override suspend fun getLocalUserForGroup(groupId: String): User? = users.find { it.groupId == groupId && it.isLocalPlayer }

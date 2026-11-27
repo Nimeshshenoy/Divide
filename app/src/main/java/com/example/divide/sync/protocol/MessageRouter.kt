@@ -16,7 +16,9 @@ class MessageRouter(
     expectedGroupId: String,
     private val onPaymentInfoResponseReceived: ((PaymentInfoResponsePayload) -> Unit)? = null,
     private val onParticipantReceived: ((ParticipantPayload) -> Unit)? = null,
-    private val onGroupIdAdopted: ((String) -> Unit)? = null
+    private val onGroupIdAdopted: ((String) -> Unit)? = null,
+    private val onEventAckReceived: ((EventAckPayload) -> Unit)? = null,
+    private val onEventsReceived: ((List<String>) -> Unit)? = null
 ) {
 
     private val gson = Gson()
@@ -136,7 +138,29 @@ class MessageRouter(
                         batch
                     )
 
-                // No immediate reply required.
+                val eventIds = batch.events.map { it.eventId }
+                onEventsReceived?.invoke(eventIds)
+
+                // Return EVENT_ACK to confirm receipt
+                if (eventIds.isNotEmpty()) {
+                    syncProtocol.createEventAckMessage(currentGroupId, eventIds)
+                } else {
+                    null
+                }
+            }
+
+            MessageType.EVENT_ACK -> {
+
+                val ackPayload =
+                    gson.fromJson(
+                        message.payload,
+                        EventAckPayload::class.java
+                    )
+
+                if (resolveGroupId(ackPayload.groupId)) {
+                    onEventAckReceived?.invoke(ackPayload)
+                }
+
                 null
             }
 

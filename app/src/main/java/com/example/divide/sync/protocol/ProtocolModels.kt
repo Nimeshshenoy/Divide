@@ -86,12 +86,22 @@ data class PaymentInfoResponsePayload(
     val amountRupees: Double
 )
 
+/**
+ * Acknowledges receipt and processing of sync events by a peer.
+ */
+data class EventAckPayload(
+    val groupId: String,
+    val eventIds: List<String>,
+    val ackingUserId: String
+)
+
 object MessageType {
     const val HELLO = "HELLO"
     const val PARTICIPANT = "PARTICIPANT"
     const val EVENT_IDS = "EVENT_IDS"
     const val REQUEST_EVENTS = "REQUEST_EVENTS"
     const val EVENT_BATCH = "EVENT_BATCH"
+    const val EVENT_ACK = "EVENT_ACK"
     const val REQUEST_PAYMENT_INFO = "REQUEST_PAYMENT_INFO"
     const val PAYMENT_INFO_RESPONSE = "PAYMENT_INFO_RESPONSE"
 }
