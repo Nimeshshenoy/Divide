@@ -57,11 +57,14 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
     private val _paymentInfoState = MutableStateFlow<PaymentInfoState>(PaymentInfoState.Idle)
     val paymentInfoState: StateFlow<PaymentInfoState> = _paymentInfoState
 
+    private val _adoptedGroupId = MutableStateFlow<String?>(null)
+    val adoptedGroupId: StateFlow<String?> = _adoptedGroupId
+
     private var nearbyManager: NearbyManager? = null
     private var syncSession: SyncSession? = null
     private var paymentTimeoutJob: Job? = null
 
-    private fun setupSync(groupId: String, isHost: Boolean, dualMode: Boolean = false) {
+    private fun setupSync(groupId: String, isHost: Boolean, dualMode: Boolean = true) {
         val localUserId = LocalRepository.profile.value.userId
         val syncProtocol = SyncProtocol(
             dao = dao,
@@ -80,6 +83,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         }
         session.onGroupIdAdopted = { adoptedGroupId ->
             Log.d("SyncViewModel", "Adopted groupId: $adoptedGroupId")
+            _adoptedGroupId.value = adoptedGroupId
             LocalRepository.joinTrip(adoptedGroupId)
         }
 
@@ -155,16 +159,18 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startHosting(groupId: String) {
         _connectedParticipant.value = null
+        _adoptedGroupId.value = null
         _syncError.value = null
         stopSync()
-        setupSync(groupId, isHost = true)
+        setupSync(groupId, isHost = true, dualMode = true)
     }
 
     fun startJoining(groupId: String) {
         _connectedParticipant.value = null
+        _adoptedGroupId.value = null
         _syncError.value = null
         stopSync()
-        setupSync(groupId, isHost = false)
+        setupSync(groupId, isHost = false, dualMode = true)
     }
 
     fun joinNearbyTrip() {
@@ -173,6 +179,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startSearchingForFriends(groupId: String) {
         _connectedParticipant.value = null
+        _adoptedGroupId.value = null
         _syncError.value = null
         stopSync()
         setupSync(groupId, isHost = false, dualMode = true)
@@ -254,6 +261,7 @@ class SyncViewModel(application: Application) : AndroidViewModel(application) {
         _discoveredUsers.value = emptyList()
         _connectedParticipant.value = null
         _pendingConnection.value = null
+        _adoptedGroupId.value = null
         _syncError.value = null
         _syncState.value = SyncState.IDLE
         _paymentInfoState.value = PaymentInfoState.Idle

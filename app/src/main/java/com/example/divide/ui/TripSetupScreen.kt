@@ -37,6 +37,8 @@ fun TripSetupScreen(
     
     // Keep one real trip ID for discovery and the eventual save.
     val draftTripId = remember(tripId) { tripId ?: UUID.randomUUID().toString() }
+    val adoptedGroupId by syncViewModel?.adoptedGroupId?.collectAsState() ?: remember { mutableStateOf<String?>(null) }
+    val effectiveTripId = adoptedGroupId ?: draftTripId
 
     val existingTripDetails = remember(tripId, trips) { tripId?.let { id -> trips.find { it.group.id == id } } }
 
@@ -207,9 +209,9 @@ fun TripSetupScreen(
             Button(
                 onClick = {
                     if (tripName.isNotBlank() && currentParticipants.isNotEmpty()) {
-                        val group = (existingTripDetails?.group ?: Group(id = draftTripId, name = tripName))
-                            .copy(name = tripName)
-                        val usersToSave = currentParticipants.map { it.copy(groupId = draftTripId) }
+                        val group = (existingTripDetails?.group ?: Group(id = effectiveTripId, name = tripName))
+                            .copy(id = effectiveTripId, name = tripName)
+                        val usersToSave = currentParticipants.map { it.copy(groupId = effectiveTripId) }
 
                         if (tripId == null) {
                             LocalRepository.addTrip(group, usersToSave)
@@ -217,7 +219,7 @@ fun TripSetupScreen(
                             LocalRepository.updateTrip(group, usersToSave)
                         }
 
-                        onSaveAndAddExpense(draftTripId)
+                        onSaveAndAddExpense(effectiveTripId)
                     } else {
                         scope.launch {
                             snackbarHostState.showSnackbar("Please enter a trip name to save.")
@@ -235,13 +237,15 @@ fun TripSetupScreen(
     if (showAddParticipantDialog) {
         val permissionLauncher = com.example.divide.sync.nearby.rememberNearbyPermissionsLauncher(
             onPermissionsGranted = {
-                syncViewModel?.startSearchingForFriends(draftTripId)
+                syncViewModel?.startSearchingForFriends(effectiveTripId)
             }
         )
 
         AlertDialog(
             onDismissRequest = {
-                syncViewModel?.stopSync()
+                if (syncState != SyncState.CONNECTED) {
+                    syncViewModel?.stopSync()
+                }
                 showAddParticipantDialog = false 
             },
             title = { Text("Add Participant") },
@@ -346,7 +350,7 @@ fun TripSetupScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         TextButton(
                             onClick = {
-                                syncViewModel?.simulateTestDeviceConnection(draftTripId)
+                                syncViewModel?.simulateTestDeviceConnection(effectiveTripId)
                             },
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) {
@@ -358,10 +362,12 @@ fun TripSetupScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = {
-                    syncViewModel?.stopSync()
+                    if (syncState != SyncState.CONNECTED) {
+                        syncViewModel?.stopSync()
+                    }
                     showAddParticipantDialog = false 
                 }) {
-                    Text("Close")
+                    Text(if (syncState == SyncState.CONNECTED) "Done" else "Close")
                 }
             }
         )

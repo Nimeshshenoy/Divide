@@ -22,13 +22,15 @@ class MessageRouter(
     private val gson = Gson()
     private var currentGroupId: String = expectedGroupId
 
-    private fun resolveGroupId(incomingGroupId: String): Boolean {
+    private fun resolveGroupId(incomingGroupId: String, allowAdopt: Boolean = false): Boolean {
         if (incomingGroupId.isEmpty() || incomingGroupId == "pending") {
             return true
         }
-        if (currentGroupId.isEmpty() || currentGroupId == "pending") {
-            currentGroupId = incomingGroupId
-            onGroupIdAdopted?.invoke(incomingGroupId)
+        if (currentGroupId.isEmpty() || currentGroupId == "pending" || allowAdopt) {
+            if (currentGroupId != incomingGroupId) {
+                currentGroupId = incomingGroupId
+                onGroupIdAdopted?.invoke(incomingGroupId)
+            }
             return true
         }
         return currentGroupId == incomingGroupId
@@ -42,7 +44,7 @@ class MessageRouter(
 
             MessageType.PARTICIPANT -> {
                 val participant = gson.fromJson(message.payload, ParticipantPayload::class.java)
-                if (resolveGroupId(participant.groupId)) {
+                if (resolveGroupId(participant.groupId, allowAdopt = true)) {
                     val targetGroupId = if (currentGroupId.isNotEmpty() && currentGroupId != "pending") {
                         currentGroupId
                     } else {
@@ -69,8 +71,8 @@ class MessageRouter(
                     return null
                 }
 
-                // Accept dynamic group ID adoption if in "pending" mode
-                if (!resolveGroupId(hello.groupId)) {
+                // Accept dynamic group ID adoption
+                if (!resolveGroupId(hello.groupId, allowAdopt = true)) {
                     return null
                 }
 
@@ -124,7 +126,8 @@ class MessageRouter(
                         EventBatchPayload::class.java
                     )
 
-                if (!resolveGroupId(batch.groupId)) {
+                val hasAddTrip = batch.events.any { it.type == "ADD_TRIP" }
+                if (!resolveGroupId(batch.groupId, allowAdopt = hasAddTrip)) {
                     return null
                 }
 

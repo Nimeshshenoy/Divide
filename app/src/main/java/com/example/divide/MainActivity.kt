@@ -19,6 +19,8 @@ import com.example.divide.ui.ProfileScreen
 import com.example.divide.ui.SyncViewModel
 import com.example.divide.ui.TripSetupScreen
 import com.example.divide.ui.theme.DivideTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 
 /**
  * The main activity of the application.
@@ -29,7 +31,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
+        FirebaseAuth.getInstance()
+            .signInAnonymously()
+            .addOnSuccessListener { result ->
+                println("UID: ${result.user?.uid}")
+                val messageRef = FirebaseDatabase.getInstance( "https://divide-dac14-default-rtdb.asia-southeast1.firebasedatabase.app")
+                    .getReference("test/message")
+
+                messageRef.setValue("Hello Divide!")
+                    .addOnSuccessListener {
+                        println("Firebase write successful")
+                    }
+                    .addOnFailureListener { error ->
+                        println("Firebase write failed: ${error.message}")
+                    }
+            }
+            .addOnFailureListener { error ->
+                println("Auth failed: ${error.message}")
+            }
         // Initialize the database and repository
         val database = ExpenseDatabase.getDatabase(this)
         LocalRepository.initialize(database.expenseDao())

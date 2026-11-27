@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Sync
@@ -61,6 +62,8 @@ fun MainScreen(
 
     // Observe Sync ViewModel State for Live Payment Info Requests
     val syncState = syncViewModel?.syncState?.collectAsState()?.value ?: SyncState.IDLE
+    val discoveredUsers = syncViewModel?.discoveredUsers?.collectAsState()?.value ?: emptyList()
+    val connectedParticipant = syncViewModel?.connectedParticipant?.collectAsState()?.value
     val paymentInfoState = syncViewModel?.paymentInfoState?.collectAsState()?.value ?: PaymentInfoState.Idle
     val pendingConnection = syncViewModel?.pendingConnection?.collectAsState()?.value
 
@@ -288,29 +291,118 @@ fun MainScreen(
     // Nearby Host/Join Dialog
     if (showSyncDialog) {
         AlertDialog(
-            onDismissRequest = { showSyncDialog = false },
-            title = { Text("Sync / Join Nearby Trip") },
-            text = { Text("Choose Host to share your trip with nearby friends, Join to discover a nearby host, or Simulate to test with 1 phone.") },
+            onDismissRequest = {
+                if (syncState != SyncState.CONNECTED) {
+                    syncViewModel?.stopSync()
+                }
+                showSyncDialog = false
+            },
+            title = { Text(if (syncState == SyncState.IDLE) "Sync / Join Nearby Trip" else "Nearby Device Search") },
+            text = {
+                Column {
+                    when (syncState) {
+                        SyncState.IDLE -> {
+                            Text("Choose Host to share your trip with nearby friends, Join to discover a nearby host, or Simulate to test with 1 phone.")
+                        }
+                        SyncState.DISCOVERING, SyncState.ADVERTISING -> {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        if (discoveredUsers.isEmpty()) "Searching nearby devices (0 found)..." else "Found ${discoveredUsers.size} device(s):",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                if (discoveredUsers.isEmpty()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        "Make sure your friend's phone has Bluetooth and Location turned on.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    discoveredUsers.forEach { peer ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(peer.endpointName, fontWeight = FontWeight.SemiBold)
+                                            Button(onClick = { syncViewModel?.inviteFriend(peer.endpointId) }) {
+                                                Text("Connect")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        SyncState.CONNECTING -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("Connecting to device...", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                        SyncState.CONNECTED -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Connected",
+                                    tint = Color.Green,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    "Connected! ${connectedParticipant?.name ?: "Friend"} joined.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        SyncState.ERROR, SyncState.DISCONNECTED -> {
+                            Text("Connection issue occurred. Tap below to retry.")
+                        }
+                    }
+                }
+            },
             confirmButton = {
-                Row {
-                    TextButton(onClick = {
-                        val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
-                        syncViewModel?.simulateTestDeviceConnection(activeTripId)
-                        showSyncDialog = false
-                    }) { Text("🧪 Simulate") }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    TextButton(onClick = {
-                        val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
-                        syncViewModel?.startHosting(activeTripId)
-                        showSyncDialog = false
-                    }) { Text("Host") }
+                if (syncState == SyncState.IDLE) {
+                    Row {
+                        TextButton(onClick = {
+                            val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
+                            syncViewModel?.simulateTestDeviceConnection(activeTripId)
+                            showSyncDialog = false
+                        }) { Text("🧪 Simulate") }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        TextButton(onClick = {
+                            val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
+                            syncViewModel?.startHosting(activeTripId)
+                        }) { Text("Host") }
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    syncViewModel?.joinNearbyTrip()
-                    showSyncDialog = false
-                }) { Text("Join") }
+                if (syncState == SyncState.IDLE) {
+                    TextButton(onClick = {
+                        syncViewModel?.joinNearbyTrip()
+                    }) { Text("Join") }
+                } else {
+                    TextButton(onClick = {
+                        if (syncState != SyncState.CONNECTED) {
+                            syncViewModel?.stopSync()
+                        }
+                        showSyncDialog = false
+                    }) {
+                        Text(if (syncState == SyncState.CONNECTED) "Done" else "Close")
+                    }
+                }
             }
         )
     }
