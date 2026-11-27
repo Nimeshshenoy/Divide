@@ -138,6 +138,7 @@ class EventProcessorTest {
         override suspend fun getSyncEventsByIds(groupId: String, eventIds: List<String>): List<SyncEvent> = events.values.filter { it.groupId == groupId && it.eventId in eventIds }
         override suspend fun getLocalUserForGroup(groupId: String): User? = users.find { it.groupId == groupId && it.isLocalPlayer }
         override suspend fun deleteUser(user: User) { users.removeIf { it.id == user.id } }
+        override suspend fun deleteSimulatedUsers() {}
         override suspend fun getLegacyLocalUsers(profileUserId: String): List<User> = emptyList()
         override suspend fun getUserByIdAndGroup(userId: String, groupId: String): User? = users.find { it.id == userId && it.groupId == groupId }
         override suspend fun updateUserIdForLocalPlayer(oldUserId: String, groupId: String, newUserId: String) {}

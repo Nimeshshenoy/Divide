@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -14,7 +16,7 @@ import androidx.room.TypeConverters
         SyncEvent::class,
         Profile::class
     ],
-    version = 10, // Bumped for composite primary key (id, groupId) on User
+    version = 11, // Bumped for isProfileConfigured field in Profile
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,6 +27,12 @@ abstract class ExpenseDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: ExpenseDatabase? = null
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE profile ADD COLUMN isProfileConfigured INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getDatabase(context: Context): ExpenseDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -32,7 +40,8 @@ abstract class ExpenseDatabase : RoomDatabase() {
                     ExpenseDatabase::class.java,
                     "expense_database"
                 )
-                    .fallbackToDestructiveMigration(dropAllTables = true) // Allow wiping the DB if schema changes
+                    .addMigrations(MIGRATION_10_11)
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance
                 instance

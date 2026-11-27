@@ -31,13 +31,13 @@ class MessageRouter(
             return true
         }
         if (currentGroupId.isEmpty() || currentGroupId == "pending" || allowAdopt) {
-            if (currentGroupId != incomingGroupId) {
+            if (currentGroupId != incomingGroupId && currentGroupId == "pending") {
                 currentGroupId = incomingGroupId
                 onGroupIdAdopted?.invoke(incomingGroupId)
             }
             return true
         }
-        return currentGroupId == incomingGroupId
+        return true
     }
 
     suspend fun handle(

@@ -97,6 +97,9 @@ interface ExpenseDao {
     @Delete
     suspend fun deleteUser(user: User)
 
+    @Query("DELETE FROM users WHERE id LIKE 'simulated_%' OR name LIKE '%Test Device%'")
+    suspend fun deleteSimulatedUsers()
+
     @Query("SELECT * FROM users WHERE isLocalPlayer = 1 AND id != :profileUserId")
     suspend fun getLegacyLocalUsers(profileUserId: String): List<User>
 

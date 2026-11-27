@@ -193,11 +193,6 @@ class SyncSession(
                 .distinct()
 
             for (gId in allTripIds) {
-                val initialKnown = syncProtocol.getKnownEventIds(gId)
-                acknowledgedEventIds.addAll(initialKnown)
-            }
-
-            for (gId in allTripIds) {
                 launch {
                     syncProtocol.getSyncEventsFlowForGroup(gId).collect { events ->
                         val unackedEvents = events.filter { event ->

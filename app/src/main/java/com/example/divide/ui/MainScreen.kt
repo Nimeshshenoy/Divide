@@ -428,18 +428,10 @@ fun MainScreen(
             },
             confirmButton = {
                 if (syncState == SyncState.IDLE) {
-                    Row {
-                        TextButton(onClick = {
-                            val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
-                            syncViewModel?.simulateTestDeviceConnection(activeTripId)
-                            showSyncDialog = false
-                        }) { Text("🧪 Simulate") }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        TextButton(onClick = {
-                            val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
-                            syncViewModel?.startHosting(activeTripId)
-                        }) { Text("Host") }
-                    }
+                    TextButton(onClick = {
+                        val activeTripId = trips.firstOrNull()?.group?.id ?: "pending"
+                        syncViewModel?.startHosting(activeTripId)
+                    }) { Text("Host") }
                 }
             },
             dismissButton = {

@@ -345,18 +345,6 @@ fun TripSetupScreen(
                             }
                         }
                     }
-
-                    if (syncState != SyncState.CONNECTED) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        TextButton(
-                            onClick = {
-                                syncViewModel?.simulateTestDeviceConnection(effectiveTripId)
-                            },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text("🧪 Simulate Test Device Connection")
-                        }
-                    }
                 }
             },
             confirmButton = {},

@@ -51,6 +51,7 @@ object LocalRepository {
 
     private suspend fun reconcileLocalUserIdentities(expenseDao: ExpenseDao) {
         val currentProfile = profile.value
+        expenseDao.deleteSimulatedUsers()
         expenseDao.reconcileLegacyLocalUserIds(currentProfile.userId)
     }
 
